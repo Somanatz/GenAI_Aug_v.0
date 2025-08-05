@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%; /* Cloud White */
+    --foreground: 222.2 84% 4.9%; /* Dark Grey for text */
+    --card: 0 0% 100%; /* Cloud White */
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%; /* Cloud White */
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 122 39% 49%; /* Emerald Green #4CAF50 */
+    --primary-foreground: 0 0% 100%; /* White */
+    --secondary: 206 90% 94%; /* Soft Sky Blue #E3F2FD */
+    --secondary-foreground: 231 48% 30%; /* Darker blue for text on soft sky blue */
+    --muted: 0 0% 96.1%; /* Light Grey #F5F5F5 */
+    --muted-foreground: 222.2 47.4% 45.1%; /* Medium Grey */
+    --accent: 231 48% 51%; /* Deep Blue #3F51B5 */
+    --accent-foreground: 0 0% 100%; /* White */
+    --destructive: 6 100% 69%; /* Coral Red #FF6F61 */
+    --destructive-foreground: 0 0% 100%; /* White */
+    --warning: 45 100% 51%; /* Amber Yellow #FFC107 */
+    --warning-foreground: 222.2 84% 4.9%; /* Dark text for contrast on yellow */
+    --border: 0 0% 93%; /* Slightly more visible border */
+    --input: 0 0% 93%;
+    --ring: 231 48% 51%; /* Deep Blue for focus rings */
+    --chart-1: 122 39% 49%; /* Emerald Green */
+    --chart-2: 231 48% 51%; /* Deep Blue */
+    --chart-3: 45 100% 51%; /* Amber Yellow */
+    --chart-4: 206 80% 60%; /* Lighter Sky Blue */
+    --chart-5: 6 100% 80%; /* Lighter Coral Red */
+    --radius: 0.5rem;
+
+    /* Sidebar variables for light theme */
+    --sidebar-background: 0 0% 96.1%; /* Light Grey */
+    --sidebar-foreground: 222.2 84% 4.9%; /* Dark text */
+    --sidebar-primary: 122 39% 49%; /* Emerald Green */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 206 90% 90%; /* Lighter Soft Sky Blue for hover */
+    --sidebar-accent-foreground: 231 48% 30%; /* Darker Blue text for hover */
+    --sidebar-border: 0 0% 85%; /* Slightly darker grey border */
+    --sidebar-ring: 231 48% 51%; /* Deep Blue */
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 122 39% 55%; /* Emerald Green (slightly adjusted for dark) */
+    --primary-foreground: 0 0% 100%; 
+    --secondary: 206 90% 12%; /* Darker Soft Sky Blue */
+    --secondary-foreground: 0 0% 90%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 231 48% 58%; /* Deep Blue (slightly adjusted for dark) */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 6 100% 75%; /* Coral Red (slightly adjusted for dark) */
+    --destructive-foreground: 0 0% 100%;
+    --warning: 45 100% 58%; /* Amber Yellow (slightly adjusted for dark) */
+    --warning-foreground: 240 10% 3.9%; /* Dark text for contrast on yellow */
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 231 48% 58%; /* Deep Blue for focus rings */
+    --chart-1: 122 39% 55%;
+    --chart-2: 231 48% 58%;
+    --chart-3: 45 100% 58%;
+    --chart-4: 206 80% 50%;
+    --chart-5: 6 100% 70%;
+    
+    /* Sidebar variables for dark theme */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 122 39% 55%; /* Emerald Green */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 20%; /* Slightly lighter dark accent */
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 231 48% 58%; /* Deep Blue */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-poppins font-bold;
+  }
+  h1 { @apply text-3xl md:text-4xl; } /* 32px (H1: 32px specified) */
+  h2 { @apply text-2xl md:text-3xl; } /* 26px (H2: 26px specified) */
+  h3 { @apply text-xl md:text-2xl; } /* 20px (H3: 20px specified) */
+  p, span, div { /* Ensuring body text size */
+    /* @apply text-base; Body: 16px */
+  }
+  /* Notes/Footnotes: 14px */
+  .text-notes {
+    @apply text-sm;
+  }
+}
+
+/* Custom scrollbar for a cleaner look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.7);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
+}
+
+.day-with-event > div {
+    box-shadow: inset 0 -3px 0 0 hsl(var(--accent));
+}
+
+.day-with-task > div {
+    box-shadow: inset 0 -3px 0 0 hsl(var(--chart-1));
+}
+
+.day-with-both > div {
+    background-image: linear-gradient(to top, hsl(var(--chart-1)) 3px, hsl(var(--accent)) 3px, hsl(var(--accent)) 6px, transparent 6px);
+}
+
+/* New Calendar Grid Styles */
+.calendar-grid .rdp-table {
+  @apply border-collapse w-full;
+}
+.calendar-grid .rdp-head_cell {
+  @apply text-center text-sm font-medium text-muted-foreground p-2;
+}
+.calendar-grid .rdp-cell {
+  @apply border border-border p-0 align-top h-28; /* h-28 is a good starting point for height */
+}
+.calendar-grid .rdp-day {
+  @apply w-full h-full p-1 text-right ;
+}
+.calendar-grid .rdp-day_outside {
+  @apply text-muted-foreground/50;
+}
