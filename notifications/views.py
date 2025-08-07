@@ -1,8 +1,8 @@
 
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAdminUser, AllowAny, IsAuthenticated
-from .models import Event, StudentTask
-from .serializers import EventSerializer, StudentTaskSerializer
+from .models import Event
+from .serializers import EventSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
 from accounts.models import CustomUser 
@@ -96,36 +96,4 @@ class EventViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("You do not have permission to delete this event.")
         if user.is_school_admin and instance.school != user.school:
             raise PermissionDenied("School admins can only delete events for their own school.")
-        instance.delete()
-
-
-class StudentTaskViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint for students to manage their personal calendar tasks.
-    """
-    serializer_class = StudentTaskSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        """
-        This view should only return tasks for the currently authenticated user.
-        """
-        return StudentTask.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        """
-        When a new task is created, it's associated with the current user.
-        """
-        if self.request.user.role != 'Student':
-            raise PermissionDenied("Only students can create personal tasks.")
-        serializer.save(user=self.request.user)
-
-    def perform_update(self, serializer):
-        if self.get_object().user != self.request.user:
-            raise PermissionDenied("You can only edit your own tasks.")
-        serializer.save()
-
-    def perform_destroy(self, instance):
-        if instance.user != self.request.user:
-            raise PermissionDenied("You can only delete your own tasks.")
         instance.delete()

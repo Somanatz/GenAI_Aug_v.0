@@ -36,28 +36,3 @@ class Event(models.Model):
         # This validation runs in Django Admin or when .full_clean() is called
         if self.target_class and self.target_class.school != self.school:
             raise ValidationError({'target_class': 'Target class must belong to the selected school.'})
-
-
-class StudentTask(models.Model):
-    """
-    A personal task or to-do item created by a student for their own calendar.
-    """
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.CASCADE, 
-        related_name='student_tasks',
-        limit_choices_to={'role': 'Student'}
-    )
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
-    due_date = models.DateField()
-    completed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['due_date', 'completed']
-
-    def __str__(self):
-        return f"{self.title} (for {self.user.username})"
-

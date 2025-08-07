@@ -1,5 +1,9 @@
 from django.contrib import admin
-from .models import CustomUser, School, StudentProfile, TeacherProfile, ParentProfile, ParentStudentLink, UserLoginActivity, UserDailyActivity, UserSubjectStudy, RecentActivity, Syllabus, SchoolClass, StudentRecommendation
+from .models import (
+    CustomUser, School, StudentProfile, TeacherProfile, ParentProfile, 
+    ParentStudentLink, UserLoginActivity, UserDailyActivity, UserSubjectStudy, 
+    RecentActivity, Syllabus, SchoolClass, StudentRecommendation, StudentTask
+)
 
 # Register your models here.
 admin.site.register(CustomUser)
@@ -15,3 +19,4 @@ admin.site.register(RecentActivity)
 admin.site.register(Syllabus)
 admin.site.register(SchoolClass)
 admin.site.register(StudentRecommendation)
+admin.site.register(StudentTask)

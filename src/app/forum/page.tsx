@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +21,7 @@ import type { ForumThread } from '@/interfaces';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { parseISO } from 'date-fns';
 
 type ThreadCategory = 'GENERAL' | 'CLASS' | 'MANAGEMENT';
 
@@ -54,29 +55,30 @@ export default function ForumPage() {
     return cats;
   }, [currentUser]);
 
-  useEffect(() => {
-    const fetchThreads = async () => {
-      setIsLoading(true);
-      setError(null);
-      let endpoint = '/forum-threads/';
-      if (activeTab !== 'all') {
-        endpoint += `?category=${activeTab}`;
-      }
-      try {
-          const threadData = await api.get<{results: ForumThread[]}>(endpoint);
-          setThreads(threadData.results || []);
-      } catch(e) {
-          console.error(e);
-          setError('Could not load threads');
-          setThreads([]);
-      } finally {
-          setIsLoading(false);
-      }
+  const fetchThreads = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    let endpoint = '/forum-threads/';
+    if (activeTab !== 'all') {
+      endpoint += `?category=${activeTab}`;
     }
+    try {
+        const threadData = await api.get<{results: ForumThread[]}>(endpoint);
+        setThreads(threadData.results || []);
+    } catch(e) {
+        console.error(e);
+        setError('Could not load threads');
+        setThreads([]);
+    } finally {
+        setIsLoading(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (currentUser) {
         fetchThreads();
     }
-  }, [activeTab, currentUser]);
+  }, [activeTab, currentUser, fetchThreads]);
 
   async function handleCreateThread() {
     if (!newCategory || !newTitle || !newContent) {
@@ -94,13 +96,7 @@ export default function ForumPage() {
     }
 
     try {
-      // This now includes the 'headers' configuration to ensure correct file upload
-      const newThread = await api.post<ForumThread>('/forum-threads/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
+      await api.post<ForumThread>('/forum-threads/', formData, true);
       toast({title: "Thread Created!", description: "Your new thread has been posted."});
       
       setIsModalOpen(false);
@@ -110,9 +106,8 @@ export default function ForumPage() {
       setNewFile(null);
       if(fileInputRef.current) fileInputRef.current.value = '';
 
-      const threadData = await api.get<{results: ForumThread[]}>('/forum-threads/');
-      setThreads(threadData.results || []);
-      setActiveTab('all');
+      setActiveTab('all'); // This will trigger a re-fetch via useEffect
+      fetchThreads(); // Also explicitly re-fetch
 
     } catch(e: any) {
       const errorMessage = e.response?.data?.title?.[0] || e.message || "An error occurred.";
@@ -240,9 +235,7 @@ export default function ForumPage() {
                     <span className="flex items-center gap-1"><Users className="h-4 w-4"/> {t.view_count} views</span>
                   </div>
                   <span>
-                    {/* FIX: Use created_at as a fallback if last_activity_at is null */}
-                    Last activity {formatDistanceToNow(new Date(t.last_activity_at || t.created_at), { addSuffix: true })}
-                    {/* Conditionally show author only if it exists */}
+                    Last activity {formatDistanceToNow(parseISO(t.last_activity_at || t.created_at), { addSuffix: true })}
                     {t.last_activity_by && ` by ${t.last_activity_by}`}
                   </span>
                 </CardContent>

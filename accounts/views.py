@@ -1,38 +1,40 @@
-from rest_framework import viewsets, status, generics, serializers as drf_serializers, permissions # type: ignore
-from rest_framework.generics import CreateAPIView, ListAPIView # type: ignore
+
+from rest_framework import viewsets, status, generics, serializers as drf_serializers, permissions
+from rest_framework.generics import CreateAPIView, ListAPIView
 from .models import (
     CustomUser, ParentStudentLink, School, StudentProfile, TeacherProfile, 
     ParentProfile, UserDailyActivity, UserLoginActivity, UserSubjectStudy, 
-    RecentActivity, Syllabus, SchoolClass, StudentRecommendation
+    RecentActivity, Syllabus, SchoolClass, StudentRecommendation, StudentTask
 )
 from content.models import Class as MasterClass, Subject as ContentSubject, Lesson, AILessonQuizAttempt, UserLessonProgress
 from content.services import check_and_award_rewards
-from rest_framework.decorators import action, api_view, permission_classes as dec_permission_classes, parser_classes # type: ignore
-import django_filters.rest_framework # type: ignore
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser # type: ignore
-from rest_framework.response import Response # type: ignore
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser # type: ignore
+from rest_framework.decorators import action, api_view, permission_classes as dec_permission_classes, parser_classes
+import django_filters.rest_framework
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from .serializers import (
     CustomUserSerializer, UserSignupSerializer, ParentStudentLinkSerializer,
     SchoolSerializer, StudentProfileSerializer, TeacherProfileSerializer, ParentProfileSerializer,
     StudentProfileCompletionSerializer, TeacherProfileCompletionSerializer, ParentProfileCompletionSerializer,
-    RecentActivitySerializer, SyllabusSerializer, SchoolClassSerializer, StudentRecommendationSerializer
+    RecentActivitySerializer, SyllabusSerializer, SchoolClassSerializer, StudentRecommendationSerializer,
+    UserDailyActivitySerializer, StudentTaskSerializer
 )
 from content.serializers import ClassSerializer as MasterClassSerializer
 from .permissions import IsParent, IsTeacher, IsTeacherOrReadOnly, IsAdminOfThisSchoolOrPlatformStaff, IsStudent
-from rest_framework.exceptions import PermissionDenied, NotFound, ValidationError # type: ignore
-from rest_framework.authtoken.views import ObtainAuthToken # type: ignore
-from rest_framework.authtoken.models import Token # type: ignore
-from django.utils import timezone # type: ignore
-from django.db.models import F, Sum, OuterRef, Subquery, Count # type: ignore
-from django.db import models as db_models # type: ignore
+from rest_framework.exceptions import PermissionDenied, NotFound, ValidationError
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.authtoken.models import Token
+from django.utils import timezone
+from django.db.models import F, Sum, OuterRef, Subquery, Count
+from django.db import models as db_models
 from datetime import timedelta, datetime
 
-from django.core.mail import send_mail # type: ignore
-from django.template.loader import render_to_string # type: ignore
-from django.conf import settings # type: ignore
-from django.shortcuts import get_object_or_404 # type: ignore
-from django.http import HttpResponse # type: ignore
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.shortcuts import get_object_or_404
+from django.http import HttpResponse
 
 
 @api_view(['POST'])
@@ -498,49 +500,51 @@ def record_study_ping(request):
     subject_id = request.data.get('subject_id')
     duration = int(request.data.get('duration', 1))
 
-    if not subject_id and user.role == 'Student':
-        # Generic library ping without a subject
-        daily_activity, _ = UserDailyActivity.objects.get_or_create(user=user, date=timezone.now().date())
-        daily_activity.study_duration_minutes = F('study_duration_minutes') + duration
-        daily_activity.save(update_fields=['study_duration_minutes'])
-        daily_activity.refresh_from_db()
-        return Response({'status': 'ok', 'total_day_minutes': daily_activity.study_duration_minutes}, status=status.HTTP_200_OK)
-
-    if not subject_id:
-        return Response({'error': 'Subject ID is required for subject-specific pings'}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        subject = ContentSubject.objects.get(pk=subject_id)
-        daily_activity, _ = UserDailyActivity.objects.get_or_create(user=user, date=timezone.now().date())
-        
-        subject_study, created = UserSubjectStudy.objects.get_or_create(
-            daily_activity=daily_activity,
-            subject=subject,
-            defaults={'duration_minutes': duration}
-        )
-
-        if not created:
-            subject_study.duration_minutes = F('duration_minutes') + duration
-            subject_study.save(update_fields=['duration_minutes'])
-
-        # Update total duration for the day
-        daily_activity.study_duration_minutes = F('study_duration_minutes') + duration
-        daily_activity.save(update_fields=['study_duration_minutes'])
-        
-        # We need to refresh to get the updated values from the database after F() expression
-        daily_activity.refresh_from_db()
-        subject_study.refresh_from_db()
-
-        return Response({'status': 'ok', 'total_day_minutes': daily_activity.study_duration_minutes, 'subject_minutes': subject_study.duration_minutes}, status=status.HTTP_200_OK)
-    except ContentSubject.DoesNotExist:
-        return Response({'error': 'Subject not found'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    if user.role != 'Student':
+        return Response({'error': 'Only students can record study time'}, status=status.HTTP_403_FORBIDDEN)
     
-from .models import StudentTask # Add StudentTask to the top imports
-from .serializers import StudentTaskSerializer # Add StudentTaskSerializer to the top imports
-from .permissions import IsStudent # Add IsStudent to the top imports
+    daily_activity, _ = UserDailyActivity.objects.get_or_create(user=user, date=timezone.now().date())
+
+    if subject_id:
+        try:
+            subject = ContentSubject.objects.get(pk=subject_id)
+            
+            # Increment subject-specific study time
+            subject_study, created = UserSubjectStudy.objects.get_or_create(
+                daily_activity=daily_activity,
+                subject=subject,
+                defaults={'duration_minutes': duration}
+            )
+            if not created:
+                subject_study.duration_minutes = F('duration_minutes') + duration
+                subject_study.save(update_fields=['duration_minutes'])
+
+            # Also increment the total daily lesson-based study time
+            daily_activity.study_duration_minutes = F('study_duration_minutes') + duration
+            daily_activity.save(update_fields=['study_duration_minutes'])
+            
+            daily_activity.refresh_from_db()
+            subject_study.refresh_from_db()
+
+            return Response({
+                'status': 'ok',
+                'total_day_minutes': daily_activity.study_duration_minutes,
+                'subject_minutes': subject_study.duration_minutes
+            }, status=status.HTTP_200_OK)
+
+        except ContentSubject.DoesNotExist:
+            return Response({'error': 'Subject not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    else:
+        # Generic library ping without a subject
+        daily_activity.library_study_duration_minutes = F('library_study_duration_minutes') + duration
+        daily_activity.save(update_fields=['library_study_duration_minutes'])
+        daily_activity.refresh_from_db()
+        return Response({
+            'status': 'ok',
+            'library_minutes': daily_activity.library_study_duration_minutes
+        }, status=status.HTTP_200_OK)
+
 
 class StudentTaskViewSet(viewsets.ModelViewSet):
     """
@@ -561,3 +565,22 @@ class StudentTaskViewSet(viewsets.ModelViewSet):
         Associate the task with the currently authenticated student upon creation.
         """
         serializer.save(student=self.request.user)
+
+class UserDailyActivityViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoint for retrieving daily user activities.
+    """
+    queryset = UserDailyActivity.objects.all()
+    serializer_class = UserDailyActivitySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
+    filterset_fields = ['user', 'date']
+
+    def get_queryset(self):
+        """
+        Users can only see their own daily activity.
+        """
+        user = self.request.user
+        if user.is_staff or user.role == 'Admin':
+            return self.queryset
+        return self.queryset.filter(user=user)

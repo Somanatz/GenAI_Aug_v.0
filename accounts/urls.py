@@ -1,12 +1,13 @@
 
-from django.urls import path, include # type: ignore
-from rest_framework.routers import DefaultRouter # type: ignore
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import (
     CustomUserViewSet, UserSignupView, ParentStudentLinkViewSet, 
     TeacherActionsViewSet, bulk_upload_users, SchoolViewSet,
     LoginView, LogoutView, ProgressAnalyticsView, record_study_ping,
     RecentActivityViewSet, SyllabusListView, MasterClassListView, SchoolClassListView,
-    StudentRecommendationViewSet, verify_email_view, contact_sales_view, StudentTaskViewSet
+    StudentRecommendationViewSet, verify_email_view, contact_sales_view, StudentTaskViewSet,
+    UserDailyActivityViewSet
 )
 from content.views import RewardProgressView # Import the view
 
@@ -18,7 +19,9 @@ router.register(r'schools', SchoolViewSet)
 router.register(r'recent-activities', RecentActivityViewSet, basename='recentactivity')
 router.register(r'school-classes', SchoolClassListView, basename='schoolclass')
 router.register(r'student-recommendations', StudentRecommendationViewSet, basename='studentrecommendation')
-router.register(r'student-tasks', StudentTaskViewSet, basename='studenttask') # Add this line
+router.register(r'student-tasks', StudentTaskViewSet, basename='studenttask')
+router.register(r'daily-activities', UserDailyActivityViewSet, basename='userdailyactivity')
+
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Book as OfficialBook, StudentResource as PersonalResource } from '@/interfaces';
+import type { Book as OfficialBook, StudentResource as PersonalResource, UserDailyActivity } from '@/interfaces';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -105,21 +105,24 @@ export default function StudentLibraryPage() {
   
   const totalStudyTime = useMemo(() => Object.values(studyData).reduce((sum, duration) => sum + duration, 0), [studyData]);
 
-  // Fetches initial data for visualizations
+  // Fetches only general library study data
   const fetchAnalytics = useCallback(async () => {
+    if (!currentUser) return;
     try {
-        const analytics = await api.get<{weekly_study_minutes: {date: string; duration: number}[]}>('/progress-analytics/');
-        const weeklyData = analytics.weekly_study_minutes || [];
+        // Fetch daily activities which now includes library-specific time
+        const dailyActivities = await api.get<{results: UserDailyActivity[]}>(`/daily-activities/?user=${currentUser.id}`);
+        const activities = dailyActivities.results || [];
+        
         const formattedData: Record<string, number> = {};
-        weeklyData.forEach(item => {
-            // Convert minutes from backend to seconds for consistency with timer
-            formattedData[item.date] = item.duration * 60;
+        activities.forEach(item => {
+            formattedData[item.date] = (item.library_study_duration_minutes || 0) * 60; // Convert minutes to seconds
         });
         setStudyData(formattedData);
     } catch(err) {
-        console.error("Could not fetch study analytics", err);
+        console.error("Could not fetch library study analytics", err);
     }
-  }, []);
+  }, [currentUser]);
+
 
   const fetchResources = useCallback(async () => {
     if (!currentUser) return;
@@ -129,12 +132,13 @@ export default function StudentLibraryPage() {
       const [booksResponse, personalResponse] = await Promise.all([
         api.get<OfficialBook[] | {results: OfficialBook[]}>('/books/'),
         api.get<PersonalResource[] | {results: PersonalResource[]}>('/student-resources/'),
-        fetchAnalytics(), // Fetch analytics along with resources
       ]);
       const official = Array.isArray(booksResponse) ? booksResponse : booksResponse.results || [];
       const personal = Array.isArray(personalResponse) ? personalResponse : personalResponse.results || [];
       setOfficialBooks(official);
       setPersonalResources(personal);
+      // Fetch analytics after resources are loaded.
+      await fetchAnalytics();
     } catch (err) {
       console.error("Failed to fetch library resources:", err);
       setError(err instanceof Error ? err.message : "Could not load library data.");
@@ -142,6 +146,7 @@ export default function StudentLibraryPage() {
       setIsLoading(false);
     }
   }, [currentUser, fetchAnalytics]);
+
 
   useEffect(() => {
     fetchResources();
@@ -183,15 +188,20 @@ export default function StudentLibraryPage() {
   const handleStartTimer = () => {
     setElapsedTime(0);
     setIsTimerRunning(true);
+    api.post('/recent-activities/', { activity_type: 'Library', details: 'Started library study session.' })
+      .catch(err => console.error("Failed to log start timer activity:", err));
   };
   
   const handleStopTimer = () => {
     setIsTimerRunning(false);
     if(elapsedTime > 0) {
+      const durationString = formatTime(elapsedTime);
       toast({
           title: "Session Ended",
-          description: `You studied for ${formatTime(elapsedTime)}. Your progress has been saved.`,
+          description: `You studied for ${durationString}. Your progress has been saved.`,
       });
+      api.post('/recent-activities/', { activity_type: 'Library', details: `Stopped library study session. Duration: ${durationString}` })
+        .catch(err => console.error("Failed to log stop timer activity:", err));
       // Refetch analytics to update visuals with latest data
       fetchAnalytics();
     }
@@ -439,7 +449,7 @@ export default function StudentLibraryPage() {
        <Card>
         <CardHeader>
             <CardTitle className="flex items-center"><Timer className="mr-2 text-primary" /> My Library Stats & Study Timer</CardTitle>
-            <CardDescription>Manually track your study time and visualize your efforts.</CardDescription>
+            <CardDescription>Manually track your general study time and visualize your efforts.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             {/* Timer and Stats Column */}
@@ -583,5 +593,7 @@ const WeeklyBarChart = ({ studyData }: { studyData: Record<string, number> }) =>
         </Card>
     )
 }
+
+    
 
     

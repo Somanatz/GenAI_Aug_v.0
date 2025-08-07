@@ -1,8 +1,8 @@
 
-from django.db import models # type: ignore
-from django.contrib.auth.models import AbstractUser # type: ignore
-from django.conf import settings # type: ignore
-from django.utils import timezone # type: ignore
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.conf import settings
+from django.utils import timezone
 import uuid
 # Use string reference to avoid circular import
 # from content.models import Class as MasterClass
@@ -68,7 +68,7 @@ class CustomUser(AbstractUser):
     is_school_admin = models.BooleanField(default=False, help_text="Designates if this admin user manages a specific school.")
     school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_and_students')
     is_verified = models.BooleanField(default=False, help_text="Designates whether the user has verified their email address.")
-    verification_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, null=True)
+    verification_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     
     def __str__(self):
         return self.username
@@ -154,6 +154,7 @@ class UserDailyActivity(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='daily_activities')
     date = models.DateField(default=timezone.now)
     study_duration_minutes = models.PositiveIntegerField(default=0, help_text="Total study duration for this day in minutes.")
+    library_study_duration_minutes = models.PositiveIntegerField(default=0, help_text="Total study duration from the general library timer for this day in minutes.")
     present = models.BooleanField(default=False, help_text="Attendance for the day.")
 
     class Meta:
@@ -183,6 +184,8 @@ class RecentActivity(models.Model):
         ('Reward', 'Reward'),
         ('Login', 'Login'),
         ('Logout', 'Logout'),
+        ('Library', 'Library'),
+        ('Forum', 'Forum'),
     ]
     activity_type = models.CharField(max_length=50, choices=ACTIVITY_TYPES)
     details = models.CharField(max_length=255)
@@ -221,7 +224,7 @@ class StudentTask(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['due_date', 'created_at']
+        ordering = ['due_date', 'completed']
 
     def __str__(self):
         return f"Task for {self.student.username}: {self.title}"

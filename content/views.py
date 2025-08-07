@@ -52,7 +52,7 @@ class SubjectViewSet(viewsets.ModelViewSet):
     serializer_class = SubjectSerializer
     permission_classes = [IsAuthenticatedOrReadOnly] 
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['master_class', 'name']
+    filterset_fields = ['master_class', 'master_class__schoolclass', 'name'] # Added master_class__schoolclass
 
     def get_serializer_context(self):
         return {'request': self.request, **super().get_serializer_context()}

@@ -115,7 +115,7 @@ export default function SignupPage() {
           </div>
 
           <div className="w-full md:w-3/5 flex justify-center md:justify-start lg:justify-center">
-            <Card className="w-full max-w-sm shadow-xl bg-card/80 backdrop-blur-md border-border/50 animate-slide-in-from-right animation-delay-200">
+            <Card className="w-full max-w-sm shadow-xl bg-card animate-slide-in-from-right animation-delay-200">
               <CardHeader className="text-center">
                 <UserPlus className="mx-auto h-10 w-10 text-primary mb-3" />
                 <CardTitle className="text-3xl font-bold">Create Your Account</CardTitle>

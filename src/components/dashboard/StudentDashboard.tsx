@@ -207,8 +207,8 @@ export default function StudentDashboard() {
   }
   
   return (
-    <div className="space-y-12">
-      <section className="text-center py-10 bg-gradient-to-r from-primary to-emerald-600 rounded-xl shadow-xl">
+    <div className="space-y-10">
+      <section className="text-center mb-9 p-10 bg-gradient-to-r from-primary to-accent rounded-xl text-white shadow-lg">
         <h1 className="text-4xl font-poppins font-extrabold mb-4 text-primary-foreground">Welcome, {currentUser?.student_profile?.full_name || currentUser?.username || 'Student'}!</h1>
         <p className="text-lg text-primary-foreground/90 max-w-2xl mx-auto">
           Your personalized journey to academic excellence starts here. Explore subjects, track progress, and unlock your potential.

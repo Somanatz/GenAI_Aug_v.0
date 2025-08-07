@@ -16,7 +16,7 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, classLevel }) => {
   return (
     <Link href={subject.href || '#'} className="block h-full">
         <Card className="flex flex-col h-full shadow-lg hover:shadow-xl hover:border-primary/50 transition-all duration-300 rounded-xl overflow-hidden">
-            <CardHeader className={`p-6 ${subject.bgColor || 'bg-secondary'}`}>
+            <CardHeader className="p-3 bg-gradient-to-r from-primary/90 to-accent/90">
                 <div className="flex items-center space-x-4">
                 <div className={`p-3 rounded-lg bg-background/20 ${subject.textColor || 'text-primary'}`}>
                     {IconComponent && <IconComponent size={32} strokeWidth={1.5} />}
@@ -30,9 +30,10 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, classLevel }) => {
                 </div>
             </CardHeader>
             <CardContent className="p-6 flex-grow">
-                <p className="text-sm text-muted-foreground mb-4 h-20 overflow-hidden">
+                <p className="text-sm text-muted-foreground mb-4 h-20 overflow-hidden bg-[linear-gradient(to_bottom,_transparent_95%,_#cce4f6_95%)] bg-[length:100%_24px] border-l-2 border-red-400 pl-2">
                 {subject.description}
                 </p>
+
             </CardContent>
             <CardFooter className="p-6 pt-0 border-t flex-col items-start">
                 <div className="flex justify-between items-center w-full mb-1">

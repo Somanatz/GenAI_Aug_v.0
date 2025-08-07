@@ -40,30 +40,16 @@ class RecursivePostSerializer(serializers.ModelSerializer):
         ]
     
     def get_author_avatar_url(self, obj):
-        """
-        FIX: Implemented the logic to find and return the user's profile picture URL.
-        """
         request = self.context.get('request')
-        if not request:
-            return None
-
+        if not request: return None
         author = obj.author
         profile = None
         role = getattr(author, 'role', None)
-
-        # Find the correct profile based on the user's role
-        if role == 'Student':
-            profile = getattr(author, 'student_profile', None)
-        elif role == 'Teacher':
-            profile = getattr(author, 'teacher_profile', None)
-        elif role == 'Parent':
-            profile = getattr(author, 'parent_profile', None)
-        
-        # If a profile and picture exist, build the full URL
+        if role == 'Student': profile = getattr(author, 'student_profile', None)
+        elif role == 'Teacher': profile = getattr(author, 'teacher_profile', None)
+        elif role == 'Parent': profile = getattr(author, 'parent_profile', None)
         if profile and hasattr(profile, 'profile_picture') and profile.profile_picture:
             return request.build_absolute_uri(profile.profile_picture.url)
-        
-        # Fallback if no picture is found
         return None
     
     def get_replies(self, obj):
@@ -82,6 +68,7 @@ class ForumThreadSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='author.username', read_only=True)
     author_avatar_url = serializers.SerializerMethodField()
     posts = serializers.SerializerMethodField()
+    # Direct relation from thread to its own attachments (for initial post)
     attachments = PostAttachmentSerializer(many=True, read_only=True)
     
     reply_count = serializers.IntegerField(read_only=True, required=False)
@@ -98,27 +85,16 @@ class ForumThreadSerializer(serializers.ModelSerializer):
         read_only_fields = ['author', 'created_at', 'updated_at', 'view_count', 'posts', 'attachments', 'school', 'author_username', 'author_avatar_url']
 
     def get_author_avatar_url(self, obj):
-        """
-        FIX: Implemented the logic for the thread author as well.
-        """
         request = self.context.get('request')
-        if not request:
-            return None
-
+        if not request: return None
         author = obj.author
         profile = None
         role = getattr(author, 'role', None)
-
-        if role == 'Student':
-            profile = getattr(author, 'student_profile', None)
-        elif role == 'Teacher':
-            profile = getattr(author, 'teacher_profile', None)
-        elif role == 'Parent':
-            profile = getattr(author, 'parent_profile', None)
-        
+        if role == 'Student': profile = getattr(author, 'student_profile', None)
+        elif role == 'Teacher': profile = getattr(author, 'teacher_profile', None)
+        elif role == 'Parent': profile = getattr(author, 'parent_profile', None)
         if profile and hasattr(profile, 'profile_picture') and profile.profile_picture:
             return request.build_absolute_uri(profile.profile_picture.url)
-        
         return None
 
     def get_posts(self, obj):

@@ -1,6 +1,6 @@
 
 from rest_framework import serializers
-from .models import Event, StudentTask
+from .models import Event
 from accounts.models import School, SchoolClass
 
 
@@ -32,10 +32,3 @@ class EventSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"target_class": "The target class must belong to the selected school."})
 
         return data
-
-
-class StudentTaskSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = StudentTask
-        fields = ['id', 'user', 'title', 'description', 'due_date', 'completed', 'created_at', 'updated_at']
-        read_only_fields = ['user', 'created_at', 'updated_at']

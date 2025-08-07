@@ -1,12 +1,10 @@
-
 // src/components/layout/Header.tsx
 'use client';
 
 import Link from 'next/link';
-import { Search, UserCircle, Menu, X, LogIn, UserPlus, LogOutIcon, School as SchoolIconLucide, LayoutDashboard, Award, MessageSquare, Lightbulb, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
+import { UserCircle, Menu, X, LogIn, UserPlus, LogOutIcon, School as SchoolIconLucide, LayoutDashboard, Award, MessageSquare, Lightbulb, Moon, Sun } from 'lucide-react'; // Added Moon, Sun
 import type { LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -24,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Logo from '@/components/shared/Logo';
 import { useTheme } from '@/context/ThemeContext';
+import { CommandMenu } from '../shared/CommandMenu';
 
 
 interface NavLink {
@@ -254,18 +253,10 @@ export default function Header() {
           </nav>
         )}
 
-        {isUnauthenticatedHomepage && !shouldHideMainHeaderElements && (
-            <div className="relative hidden sm:block">
-              <SchoolIconLucide className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input type="search" placeholder="Find a School..." className="pl-10 h-9 w-[150px] lg:w-[250px]" />
-            </div>
-        )}
-
         <div className="flex items-center space-x-2 sm:space-x-4">
           {!shouldHideMainHeaderElements && (
             <div className="relative hidden sm:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input type="search" placeholder="Search platform..." className="pl-10 h-9 w-[100px] lg:w-[200px]" />
+              <CommandMenu />
             </div>
           )}
 
@@ -342,17 +333,10 @@ export default function Header() {
                 <div className={cn("mt-auto p-4 border-t space-y-4", (isLoadingAuth || shouldHideMainHeaderElements) && "pt-4")}>
                   {!shouldHideMainHeaderElements && (
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input type="search" placeholder="Search platform..." className="pl-10 h-9 w-full" />
+                       <CommandMenu />
                     </div>
                   )}
-                  {isUnauthenticatedHomepage && !shouldHideMainHeaderElements && (
-                     <div className="relative">
-                        <SchoolIconLucide className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input type="search" placeholder="Find a School..." className="pl-10 h-9 w-full" />
-                    </div>
-                  )}
-
+                  
                   {isLoadingAuth ? (
                     <Skeleton className="h-10 w-full rounded-md" />
                   ) : currentUser ? (

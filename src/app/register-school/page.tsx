@@ -145,7 +145,7 @@ export default function RegisterSchoolPage() {
         <div className="absolute top-0 left-0 w-full h-full bg-black/50 dark:bg-black/60 z-10 backdrop-blur-sm"></div>
         
         <div className="relative z-20 w-full max-w-2xl">
-          <Card className="w-full shadow-xl bg-card/80 backdrop-blur-md border-border/50 animate-fade-in-up">
+          <Card className="w-full shadow-xl bg-card animate-fade-in-up">
               <CardHeader className="text-center">
               <SchoolIcon className="mx-auto h-12 w-12 text-primary mb-4" />
               <CardTitle className="text-3xl font-bold">Register Your School</CardTitle>

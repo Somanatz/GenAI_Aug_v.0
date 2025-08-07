@@ -1,22 +1,27 @@
-
-from rest_framework import serializers # type: ignore
+from rest_framework import serializers
 from .models import (
     CustomUser, ParentStudentLink, School, StudentProfile, TeacherProfile, 
-    ParentProfile, RecentActivity, Syllabus, SchoolClass, StudentRecommendation
+    ParentProfile, Syllabus, SchoolClass, StudentRecommendation, RecentActivity,
+    UserDailyActivity, UserSubjectStudy, StudentTask
 )
 from content.models import Class as MasterClass, Subject as ContentSubject # Avoid naming collision
-from django.contrib.auth.password_validation import validate_password # type: ignore
-from django.core.exceptions import ValidationError as DjangoValidationError # type: ignore
-from django.db import transaction # type: ignore
+from django.utils.text import slugify # Import slugify
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 
-from django.core.mail import send_mail # type: ignore
-from django.template.loader import render_to_string # type: ignore
-from django.conf import settings # type: ignore
-from django.urls import reverse # type: ignore
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.urls import reverse
+import uuid
 
 def send_verification_email(user, request):
+    if not user.verification_token:
+        user.verification_token = uuid.uuid4()
+        user.save(update_fields=['verification_token'])
+        
     token = user.verification_token
-    # Note: You need to configure your frontend URL here
     verification_link = request.build_absolute_uri(reverse('verify_email', kwargs={'token': token}))
     subject = 'Verify your GenAI-Campus Account'
     message = f'Hi {user.username},\n\nPlease click the link to verify your account:\n{verification_link}'
@@ -26,17 +31,16 @@ def send_verification_email(user, request):
     })
     send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email], html_message=html_message)
 
+
 class StudentRecommendationSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentRecommendation
         fields = ['id', 'student', 'recommendation_data', 'created_at']
-        read_only_fields = ['student', 'created_at'] # Student is set from request context
+        read_only_fields = ['student', 'created_at']
 
 class SchoolClassSerializer(serializers.ModelSerializer):
-    """Serializer for the SchoolClass model."""
     name = serializers.CharField(source='master_class.name', read_only=True)
     description = serializers.CharField(source='master_class.description', read_only=True)
-
     class Meta:
         model = SchoolClass
         fields = ['id', 'school', 'master_class', 'name', 'description']
@@ -46,10 +50,10 @@ class SchoolSerializer(serializers.ModelSerializer):
     admin_email = serializers.EmailField(write_only=True, required=True)
     admin_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     syllabus_id = serializers.PrimaryKeyRelatedField(
-        queryset=Syllabus.objects.all(), source='syllabus', write_only=True
+        queryset=Syllabus.objects.all(), source='syllabus', write_only=True, required=False, allow_null=True
     )
     selected_class_ids = serializers.ListField(
-        child=serializers.IntegerField(), write_only=True, required=True
+        child=serializers.IntegerField(), write_only=True, required=False
     )
 
     class Meta:
@@ -78,14 +82,14 @@ class SchoolSerializer(serializers.ModelSerializer):
         admin_username = validated_data.pop('admin_username')
         admin_email = validated_data.pop('admin_email')
         admin_password = validated_data.pop('admin_password')
-        selected_class_ids = validated_data.pop('selected_class_ids')
+        selected_class_ids = validated_data.pop('selected_class_ids', [])
 
         if CustomUser.objects.filter(username=admin_username).exists():
             raise serializers.ValidationError({"admin_username": "An admin user with this username already exists."})
         if CustomUser.objects.filter(email=admin_email).exists():
             raise serializers.ValidationError({"admin_email": "An admin user with this email already exists."})
         
-        try:
+        with transaction.atomic():
             admin_user = CustomUser.objects.create_user(
                 username=admin_username,
                 email=admin_email,
@@ -93,28 +97,23 @@ class SchoolSerializer(serializers.ModelSerializer):
                 role='Admin',
                 is_school_admin=True,
                 is_staff=False, 
-                is_active=False # Deactivate until email is verified
+                is_active=False
             )
-        except Exception as e: 
-            raise serializers.ValidationError({"admin_user_creation": str(e)})
 
-        # Create the school instance first
-        school = School.objects.create(admin_user=admin_user, **validated_data)
-        
-        # Link the school to the selected master classes
-        for class_id in selected_class_ids:
-            try:
-                master_class = MasterClass.objects.get(id=class_id)
-                SchoolClass.objects.create(school=school, master_class=master_class)
-            except MasterClass.DoesNotExist:
-                # Optionally handle or log this error
-                continue
-        
-        admin_user.school = school 
-        admin_user.save()
-        
-        # Send verification email
-        send_verification_email(admin_user, self.context['request'])
+            school = School.objects.create(admin_user=admin_user, **validated_data)
+            
+            if selected_class_ids:
+                for class_id in selected_class_ids:
+                    try:
+                        master_class = MasterClass.objects.get(id=class_id)
+                        SchoolClass.objects.create(school=school, master_class=master_class)
+                    except MasterClass.DoesNotExist:
+                        continue
+            
+            admin_user.school = school 
+            admin_user.save()
+            
+            send_verification_email(admin_user, self.context['request'])
         
         return school
 
@@ -140,7 +139,6 @@ class StudentProfileSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.profile_picture.url)
             return obj.profile_picture.url 
         return None
-
 
 class TeacherProfileSerializer(serializers.ModelSerializer):
     school_name = serializers.CharField(source='school.name', read_only=True, allow_null=True)
@@ -173,7 +171,6 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
             return obj.profile_picture.url
         return None
 
-
 class ParentProfileSerializer(serializers.ModelSerializer):
     profile_picture_url = serializers.SerializerMethodField()
     class Meta:
@@ -199,8 +196,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
     school_name = serializers.CharField(source='school.name', read_only=True, allow_null=True)
     school_id = serializers.PrimaryKeyRelatedField(queryset=School.objects.all(), source='school', write_only=True, allow_null=True, required=False)
     profile_completed = serializers.SerializerMethodField()
-    administered_school = SchoolSerializer(read_only=True, allow_null=True) # For school admin user details
-
+    administered_school = SchoolSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = CustomUser
@@ -210,9 +206,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             'student_profile', 'teacher_profile', 'parent_profile',
             'profile_completed',
         ]
-        extra_kwargs = {
-            'password': {'write_only': True, 'required': False},
-        }
+        extra_kwargs = { 'password': {'write_only': True, 'required': False} }
 
     def get_profile_completed(self, obj):
         if obj.role == 'Student' and hasattr(obj, 'student_profile') and obj.student_profile:
@@ -231,13 +225,10 @@ class CustomUserSerializer(serializers.ModelSerializer):
         password = validated_data.pop('password', None)
         if password:
             instance.set_password(password)
-        
         school = validated_data.pop('school', None) 
         if school:
             instance.school = school
-        
         return super().update(instance, validated_data)
-
 
 class UserSignupSerializer(serializers.ModelSerializer):
     class Meta:
@@ -261,7 +252,7 @@ class UserSignupSerializer(serializers.ModelSerializer):
             email=validated_data['email'],
             password=validated_data['password'],
             role=validated_data['role'],
-            is_active=False # Deactivate until email is verified 
+            is_active=False
         )
         if user.role == 'Student':
             StudentProfile.objects.create(user=user, profile_completed=False)
@@ -269,11 +260,8 @@ class UserSignupSerializer(serializers.ModelSerializer):
             TeacherProfile.objects.create(user=user, profile_completed=False)
         elif user.role == 'Parent':
             ParentProfile.objects.create(user=user, profile_completed=False)
-
-        # Send verification email
         send_verification_email(user, self.context['request'])
         return user
-
 
 class ParentStudentLinkSerializer(serializers.ModelSerializer):
     parent_username = serializers.CharField(source='parent.username', read_only=True)
@@ -297,7 +285,6 @@ class ParentStudentLinkSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"student": "Selected user is not a Student."})
         return data
 
-# Serializers for Profile Completion
 class StudentProfileCompletionSerializer(serializers.ModelSerializer):
     school_id = serializers.PrimaryKeyRelatedField(queryset=School.objects.all(), source='school', write_only=True, allow_null=True, required=False)
     enrolled_class_id = serializers.PrimaryKeyRelatedField(queryset=SchoolClass.objects.all(), source='enrolled_class', write_only=True, allow_null=True, required=False)
@@ -341,7 +328,6 @@ class ParentProfileCompletionSerializer(serializers.ModelSerializer):
         fields = ['full_name', 'mobile_number', 'address', 'profile_picture', 'profile_completed']
         read_only_fields = ['user']
 
-
 class RecentActivitySerializer(serializers.ModelSerializer):
     class Meta:
         model = RecentActivity
@@ -352,11 +338,18 @@ class SyllabusSerializer(serializers.ModelSerializer):
         model = Syllabus
         fields = ['id', 'name', 'description']
 
-from .models import StudentTask # Add StudentTask to the import statement at the top
+class UserDailyActivitySerializer(serializers.ModelSerializer):
+    """
+    Serializer for the UserDailyActivity model.
+    """
+    class Meta:
+        model = UserDailyActivity
+        fields = ['id', 'user', 'date', 'study_duration_minutes', 'library_study_duration_minutes', 'present']
+        read_only_fields = ['user']
 
 class StudentTaskSerializer(serializers.ModelSerializer):
     """Serializer for the StudentTask model."""
     class Meta:
         model = StudentTask
         fields = ['id', 'student', 'title', 'description', 'due_date', 'completed', 'created_at']
-        read_only_fields = ['student'] # The student is set automatically from the request user
+        read_only_fields = ['student']

@@ -144,9 +144,9 @@ export default function StudentRewardsPage() {
 
   return (
     <div className="space-y-12">
-      <header className="py-10 bg-gradient-to-br from-primary to-accent text-primary-foreground text-center rounded-xl shadow-xl">
-        <Trophy className="mx-auto h-20 w-20 mb-4 drop-shadow-lg" />
-        <h1 className="text-4xl md:text-5xl font-bold">My Rewards & Achievements</h1>
+      <header className="text-center mb-7 p-3 bg-gradient-to-r from-primary to-accent rounded-xl text-white shadow-lg">
+        <Trophy className="mx-auto h-20 w-20 mb-3 drop-shadow-lg" />
+        <h1 className="text-5xl md:text-4xl font-bold">My Rewards & Achievements</h1>
         <p className="text-lg md:text-xl mt-3 max-w-2xl mx-auto">Keep learning to unlock more amazing badges!</p>
       </header>
 

@@ -138,12 +138,13 @@ export default function StudentProgressPage() {
 
   return (
     <div className="space-y-8">
-      <Card>
+      <Card className="text-center mb-8 p-9 bg-gradient-to-r from-primary to-accent rounded-xl text-white shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold flex items-center">
-            <BarChart3 className="mr-3 h-7 w-7 text-primary" /> My Progress Dashboard
+          <CardTitle className="text-4xl font-bold flex items-center justify-center">
+            <BarChart3 className="mr-2 h-9 w-9 text-white" />
+            My Progress Dashboard
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-white text-2xl mx-auto">
             A detailed look at your learning journey, habits, and achievements.
           </CardDescription>
         </CardHeader>
