@@ -1,27 +1,45 @@
-
 import type { LucideIcon } from 'lucide-react';
 
-export interface ForumCategory {
+export interface PostAttachment {
   id: number;
-  name: string;
-  description: string;
-  slug: string;
+  file_url: string;
+  file_name?: string;
+  file_type?: 'image' | 'file';
 }
 
 export interface ForumThread {
   id: number;
-  category: number;
-  category_name: string;
+  school: number;
+  school_class: number | null;
   author: number;
   author_username: string;
+  category: 'GENERAL' | 'CLASS' | 'MANAGEMENT';
   title: string;
   created_at: string;
   updated_at: string;
   view_count: number;
   reply_count: number;
-  last_activity_by: string;
   last_activity_at: string;
+  last_activity_by: string;
+  posts?: ForumPost[];
+  attachments?: PostAttachment[];
 }
+
+export interface ForumPost {
+    id: number;
+    thread: number;
+    author: number;
+    author_username: string;
+    author_avatar_url: string;
+    content: string;
+    created_at: string;
+    parent_post: number | null;
+    replies: ForumPost[];
+    attachments: PostAttachment[];
+    like_count: number;
+    is_liked_by_user: boolean;
+}
+
 
 export interface Syllabus {
   id: string | number;
@@ -365,5 +383,3 @@ export interface StudentRecommendation {
     recommendation_data: any; // The full JSON output from the AI
     created_at: string;
 }
-
-    

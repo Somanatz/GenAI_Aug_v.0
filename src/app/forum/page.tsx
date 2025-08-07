@@ -1,11 +1,10 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
 import {
   Card, CardHeader, CardTitle, CardDescription, CardContent
@@ -15,18 +14,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PlusCircle, Loader2, AlertTriangle, MessageSquare, Users } from 'lucide-react';
+import { PlusCircle, Loader2, AlertTriangle, MessageSquare, Users, Brain, School, Paperclip } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { api } from '@/lib/api';
-import type { ForumCategory, ForumThread } from '@/interfaces';
+import type { ForumThread } from '@/interfaces';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
+
+type ThreadCategory = 'GENERAL' | 'CLASS' | 'MANAGEMENT';
 
 export default function ForumPage() {
   const { toast } = useToast();
-  const [categories, setCategories] = useState<ForumCategory[]>([]);
+  const { currentUser } = useAuth();
+  
   const [threads, setThreads]     = useState<ForumThread[]>([]);
-  const [activeTab, setActiveTab] = useState<'all'|string>('all');
+  const [activeTab, setActiveTab] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError]         = useState<string|null>(null);
 
@@ -34,71 +37,108 @@ export default function ForumPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newTitle, setNewTitle]   = useState('');
-  const [newCatId, setNewCatId]       = useState<string>('');
   const [newContent, setNewContent] = useState('');
-
-  const fetchCategories = async () => {
-      try {
-          const catsData = await api.get<ForumCategory[]>('/forum/categories/');
-          const actualCategories = Array.isArray(catsData) ? catsData : (catsData as any).results || [];
-          setCategories(actualCategories);
-      } catch (err) {
-          console.error(err);
-      }
-  };
-
-  const fetchThreads = async (slug?: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-        const threadData = await api.get<ForumThread[]>(slug ? `/forum/threads/?category__slug=${slug}` : '/forum/threads/');
-        const actualThreads = Array.isArray(threadData) ? threadData : (threadData as any).results || [];
-        setThreads(actualThreads);
-    } catch(e) {
-        console.error(e);
-        setError('Could not load threads');
-        setThreads([]);
-    } finally {
-        setIsLoading(false);
+  const [newCategory, setNewCategory] = useState<ThreadCategory>('GENERAL');
+  const [newFile, setNewFile]       = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const availableCategories = useMemo(() => {
+    if (!currentUser) return [];
+    const cats: { value: ThreadCategory, label: string }[] = [{ value: 'GENERAL', label: 'General Discussion' }];
+    if (currentUser.role === 'Student') {
+      cats.push({ value: 'CLASS', label: 'My Class Discussion' });
     }
-  }
+    if (currentUser.role === 'Teacher' || currentUser.role === 'Admin') {
+      cats.push({ value: 'MANAGEMENT', label: 'School Management (Staff Only)' });
+    }
+    return cats;
+  }, [currentUser]);
 
   useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  useEffect(() => {
-    fetchThreads(activeTab === 'all' ? undefined : activeTab);
-  }, [activeTab]);
+    const fetchThreads = async () => {
+      setIsLoading(true);
+      setError(null);
+      let endpoint = '/forum-threads/';
+      if (activeTab !== 'all') {
+        endpoint += `?category=${activeTab}`;
+      }
+      try {
+          const threadData = await api.get<{results: ForumThread[]}>(endpoint);
+          setThreads(threadData.results || []);
+      } catch(e) {
+          console.error(e);
+          setError('Could not load threads');
+          setThreads([]);
+      } finally {
+          setIsLoading(false);
+      }
+    }
+    if (currentUser) {
+        fetchThreads();
+    }
+  }, [activeTab, currentUser]);
 
   async function handleCreateThread() {
-    if (!newCatId || !newTitle || !newContent) {
+    if (!newCategory || !newTitle || !newContent) {
         toast({title: "Missing fields", description: "Please select a category and provide a title and message.", variant: "destructive"});
         return;
     }
     setIsSubmitting(true);
+
+    const formData = new FormData();
+    formData.append('title', newTitle);
+    formData.append('category', newCategory);
+    formData.append('content', newContent);
+    if (newFile) {
+        formData.append('file', newFile);
+    }
+
     try {
-      const thread = await api.post<ForumThread>('/forum/threads/', { category: parseInt(newCatId, 10), title: newTitle });
-      
-      if (thread && thread.id) {
-          await api.post('/forum/posts/', { thread: thread.id, content: newContent });
-      }
+      // This now includes the 'headers' configuration to ensure correct file upload
+      const newThread = await api.post<ForumThread>('/forum-threads/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
 
       toast({title: "Thread Created!", description: "Your new thread has been posted."});
+      
       setIsModalOpen(false);
-      setNewTitle(''); setNewContent(''); setNewCatId('');
-      if (activeTab !== 'all') {
-          setActiveTab('all');
-      } else {
-          fetchThreads();
-      }
+      setNewTitle(''); 
+      setNewContent(''); 
+      setNewCategory('GENERAL');
+      setNewFile(null);
+      if(fileInputRef.current) fileInputRef.current.value = '';
+
+      const threadData = await api.get<{results: ForumThread[]}>('/forum-threads/');
+      setThreads(threadData.results || []);
+      setActiveTab('all');
 
     } catch(e: any) {
-      toast({title: "Failed to create thread", description: e.message || "An error occurred.", variant: "destructive"});
+      const errorMessage = e.response?.data?.title?.[0] || e.message || "An error occurred.";
+      toast({title: "Failed to create thread", description: errorMessage, variant: "destructive"});
     } finally {
         setIsSubmitting(false);
     }
   }
+
+  const getCategoryDisplay = (categoryValue: string) => {
+    const cat = availableCategories.find(c => c.value === categoryValue);
+    if (!cat) {
+      switch(categoryValue) {
+        case 'GENERAL': return { name: 'General', Icon: School };
+        case 'CLASS': return { name: 'Class', Icon: Brain };
+        case 'MANAGEMENT': return { name: 'Management', Icon: Users };
+        default: return { name: 'Discussion', Icon: MessageSquare };
+      }
+    }
+    switch (cat.value) {
+      case 'GENERAL': return { name: cat.label, Icon: School };
+      case 'CLASS': return { name: cat.label, Icon: Brain };
+      case 'MANAGEMENT': return { name: cat.label, Icon: Users };
+      default: return { name: cat.label, Icon: MessageSquare };
+    }
+  };
 
   return (
     <div className="container mx-auto p-4 md:p-6">
@@ -112,8 +152,8 @@ export default function ForumPage() {
         <Tabs defaultValue="all" value={activeTab} onValueChange={(v) => setActiveTab(v)}>
           <TabsList>
             <TabsTrigger value="all">All Threads</TabsTrigger>
-            {categories.map(c => (
-              <TabsTrigger key={c.slug} value={c.slug}>{c.name}</TabsTrigger>
+            {availableCategories.map(c => (
+              <TabsTrigger key={c.value} value={c.value}>{c.label}</TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
@@ -124,14 +164,15 @@ export default function ForumPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Start a new discussion</DialogTitle>
+              <DialogDescription>Your thread will be visible to members of your school based on the category you choose.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="category-select">Category</Label>
-                <Select onValueChange={setNewCatId} value={newCatId}>
+                <Select onValueChange={(v) => setNewCategory(v as ThreadCategory)} value={newCategory}>
                     <SelectTrigger id="category-select"><SelectValue placeholder="Select a category" /></SelectTrigger>
                     <SelectContent>
-                        {categories.map(c=>(<SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>))}
+                        {availableCategories.map(c=>(<SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>))}
                     </SelectContent>
                 </Select>
               </div>
@@ -143,10 +184,27 @@ export default function ForumPage() {
                 <Label htmlFor="thread-content">Message</Label>
                 <Textarea id="thread-content" rows={5} value={newContent} onChange={e=>setNewContent(e.target.value)} placeholder="Start the conversation here..."/>
               </div>
-              <Button onClick={handleCreateThread} disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Create Thread
-              </Button>
+              <div className="space-y-2">
+                <Label htmlFor="thread-attachment">Attachment (Optional)</Label>
+                <Input 
+                  id="thread-attachment" 
+                  type="file" 
+                  ref={fileInputRef}
+                  onChange={(e) => setNewFile(e.target.files ? e.target.files[0] : null)}
+                />
+                {newFile && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-2 pt-2">
+                    <Paperclip className="h-4 w-4" />
+                    Selected: {newFile.name}
+                  </p>
+                )}
+              </div>
             </div>
+            <DialogFooter>
+                <Button onClick={handleCreateThread} disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Create Thread
+                </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -163,27 +221,34 @@ export default function ForumPage() {
       )}
 
       <div className="space-y-4">
-        {!isLoading && threads.map(t => (
-          <Card key={t.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
-              <Link href={`/forum/thread/${t.id}`} legacyBehavior>
-                <a className="text-lg font-semibold text-primary hover:underline">{t.title}</a>
-              </Link>
-              <CardDescription className="text-xs">
-                by {t.author_username} in <span className="font-medium">{t.category_name}</span>
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex justify-between items-center text-xs text-muted-foreground pt-2">
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1"><MessageSquare className="h-4 w-4"/> {t.reply_count} replies</span>
-                <span className="flex items-center gap-1"><Users className="h-4 w-4"/> {t.view_count} views</span>
-              </div>
-              <span>
-                Last post by {t.last_activity_by} ({formatDistanceToNow(new Date(t.last_activity_at),{addSuffix:true})})
-              </span>
-            </CardContent>
-          </Card>
-        ))}
+        {!isLoading && threads.map(t => {
+          const { name, Icon } = getCategoryDisplay(t.category);
+          return (
+            <Card key={t.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <Link href={`/forum/thread/${t.id}`} legacyBehavior>
+                  <a className="text-lg font-semibold text-primary hover:underline">{t.title}</a>
+                </Link>
+                <CardDescription className="text-xs flex items-center gap-2">
+                  by {t.author_username} in 
+                  <span className="font-medium flex items-center gap-1"><Icon className="h-3 w-3"/>{name}</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-between items-center text-xs text-muted-foreground pt-2">
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1"><MessageSquare className="h-4 w-4"/> {t.reply_count} replies</span>
+                    <span className="flex items-center gap-1"><Users className="h-4 w-4"/> {t.view_count} views</span>
+                  </div>
+                  <span>
+                    {/* FIX: Use created_at as a fallback if last_activity_at is null */}
+                    Last activity {formatDistanceToNow(new Date(t.last_activity_at || t.created_at), { addSuffix: true })}
+                    {/* Conditionally show author only if it exists */}
+                    {t.last_activity_by && ` by ${t.last_activity_by}`}
+                  </span>
+                </CardContent>
+            </Card>
+          )
+        })}
         {(!isLoading && threads.length===0 && !error) && (
           <p className="text-center text-muted-foreground py-10">No threads here yet. Be the first to start a conversation!</p>
         )}

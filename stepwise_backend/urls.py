@@ -12,7 +12,8 @@ urlpatterns = [
     path('api/', include('notifications.urls')),
     # The login view is part of accounts.urls now, this line is redundant
     path('api/token-auth/', LoginView.as_view(), name='api_token_auth'),
-    path('api/forum/', include('forum.urls')), # Correctly namespace forum urls
+    path('api/', include('forum.urls')), # Use the base 'api/' path
+    path('api/token-auth/', LoginView.as_view(), name='api_token_auth'), # Overwrite with custom login view
     
 ]
 
