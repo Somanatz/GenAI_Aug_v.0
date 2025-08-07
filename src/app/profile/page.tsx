@@ -12,15 +12,17 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/context/AuthContext";
-import { UserCircle, Edit3, Shield, LogOut, Mail, Briefcase, BookUser, Star, Languages, Loader2, Building, CalendarClock, Droplets, HeartPulse, Gamepad2, Leaf, Upload, Users2, UserCheck } from "lucide-react"; 
+import { UserCircle, Edit3, Shield, LogOut, Mail, Briefcase, BookUser, Star, Languages, Loader2, Building, CalendarClock, Droplets, HeartPulse, Gamepad2, Leaf, Upload, Users2, UserCheck, School as SchoolIcon, AlertCircle } from "lucide-react"; 
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { UserRole, StudentProfileData, TeacherProfileData, ParentProfileData, School as SchoolInterface, Class as ClassInterface, Subject as SubjectInterface, User } from '@/interfaces';
+import type { UserRole, StudentProfileData, TeacherProfileData, ParentProfileData, School as SchoolInterface, SchoolClass, Subject as SubjectInterface, User } from '@/interfaces';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { format } from 'date-fns';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 // Schemas for different profile types
@@ -32,7 +34,7 @@ const baseProfileSchema = z.object({
       message: "Invalid email address",
     })
     .optional(),
-  currentPassword: z.string().optional(), // Not typically sent for profile updates, but for password change logic
+  currentPassword: z.string().optional(),
   newPassword: z.string().optional(),
   confirmNewPassword: z.string().optional(),
   profile_picture: z.any().optional(), 
@@ -102,82 +104,51 @@ export default function ProfilePage() {
 
 
   const [schools, setSchools] = useState<SchoolInterface[]>([]);
-  const [classes, setClasses] = useState<ClassInterface[]>([]);
+  const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [subjects, setSubjects] = useState<SubjectInterface[]>([]);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: { 
-      username: '', 
-      email: '',
-      full_name: '',
-      school_id: undefined, 
-      enrolled_class_id: undefined,
-      preferred_language: '',
-      father_name: '',
-      mother_name: '',
-      place_of_birth: '',
-      date_of_birth: '',
-      blood_group: '',
-      needs_assistant_teacher: false,
-      admission_number: '',
-      parent_email_for_linking: '',
-      parent_mobile_for_linking: '',
-      hobbies: '',
-      favorite_sports: '',
-      interested_in_gardening_farming: false,
-      parent_occupation: '',
-      nickname: '',
-      assigned_classes_ids: [],
-      subject_expertise_ids: [],
-      interested_in_tuition: false,
-      mobile_number: '',
-      address: '',
-      currentPassword: '',
-      newPassword: '',
-      confirmNewPassword: '',
+      username: '', email: '', full_name: '', school_id: undefined, enrolled_class_id: undefined,
+      preferred_language: '', father_name: '', mother_name: '', place_of_birth: '', date_of_birth: '',
+      blood_group: '', needs_assistant_teacher: false, admission_number: '', parent_email_for_linking: '',
+      parent_mobile_for_linking: '', hobbies: '', favorite_sports: '', interested_in_gardening_farming: false,
+      parent_occupation: '', nickname: '', assigned_classes_ids: [], subject_expertise_ids: [],
+      interested_in_tuition: false, mobile_number: '', address: '', currentPassword: '',
+      newPassword: '', confirmNewPassword: '',
     }
   });
   
   useEffect(() => {
-    const fetchDropdownData = async () => {
-      try {
-        const schoolResponse = await api.get<SchoolInterface[] | { results: SchoolInterface[] }>('/schools/');
-        const schoolData = Array.isArray(schoolResponse) ? schoolResponse : schoolResponse.results || [];
-        setSchools(schoolData);
-
-        const subjectResponse = await api.get<SubjectInterface[] | { results: SubjectInterface[] }>('/subjects/');
-        const subjectData = Array.isArray(subjectResponse) ? subjectResponse : subjectResponse.results || [];
-        setSubjects(subjectData);
-
-      } catch (error) {
-        toast({ title: "Error", description: "Could not load data for dropdowns.", variant: "destructive" });
-      }
-    };
-    fetchDropdownData();
+    api.get<{results: SchoolInterface[]}>('/schools/').then(response => {
+      setSchools(response.results || []);
+    }).catch(error => {
+      toast({ title: "Error", description: "Could not load schools list.", variant: "destructive" });
+    });
   }, [toast]);
 
   useEffect(() => {
-    const fetchClasses = async () => {
-      if (selectedSchoolId) {
-        try {
-          const classResponse = await api.get<ClassInterface[] | { results: ClassInterface[] }>(`/classes/?school=${selectedSchoolId}`);
-          const classData = Array.isArray(classResponse) ? classResponse : classResponse.results || [];
-          setClasses(classData);
-        } catch (error) {
-          setClasses([]); 
-          toast({ title: "Error", description: "Could not load classes for the selected school.", variant: "destructive" });
+    const fetchDependentData = async () => {
+        if (!selectedSchoolId) {
+            setClasses([]);
+            setSubjects([]);
+            return;
         }
-      } else {
-        setClasses([]);
-      }
+        try {
+            const classResponse = await api.get<{results: SchoolClass[]}>(`/school-classes/?school=${selectedSchoolId}&page_size=200`);
+            setClasses(classResponse.results || []);
+            
+            const subjectResponse = await api.get<{results: SubjectInterface[]}>(`/subjects/?master_class__syllabus__schools=${selectedSchoolId}&page_size=500`);
+            setSubjects(subjectResponse.results || []);
+        } catch (error) {
+            setClasses([]); 
+            setSubjects([]);
+            toast({ title: "Error", description: "Could not load classes or subjects for the selected school.", variant: "destructive" });
+        }
     };
-    if (selectedSchoolId) { 
-        fetchClasses();
-    } else {
-        setClasses([]); 
-    }
+    fetchDependentData();
   }, [selectedSchoolId, toast]);
 
   useEffect(() => {
@@ -187,12 +158,13 @@ export default function ProfilePage() {
         email: currentUser.email || '',
       };
       let currentProfilePictureUrl: string | null = null;
+      let initialSchoolId = null;
 
       if (currentUser.role === 'Student' && currentUser.student_profile) {
         const sp = currentUser.student_profile;
+        initialSchoolId = sp.school ? String(sp.school) : null;
         defaultValues.full_name = sp.full_name || '';
-        defaultValues.school_id = sp.school ? String(sp.school) : undefined;
-        if (sp.school) setSelectedSchoolId(String(sp.school)); 
+        defaultValues.school_id = initialSchoolId ?? undefined;
         defaultValues.enrolled_class_id = sp.enrolled_class ? String(sp.enrolled_class) : undefined;
         defaultValues.preferred_language = sp.preferred_language || '';
         defaultValues.father_name = sp.father_name || '';
@@ -212,9 +184,9 @@ export default function ProfilePage() {
         currentProfilePictureUrl = sp.profile_picture_url || null;
       } else if (currentUser.role === 'Teacher' && currentUser.teacher_profile) {
         const tp = currentUser.teacher_profile;
+        initialSchoolId = tp.school ? String(tp.school) : null;
         defaultValues.full_name = tp.full_name || '';
-        defaultValues.school_id = tp.school ? String(tp.school) : undefined;
-        if (tp.school) setSelectedSchoolId(String(tp.school)); 
+        defaultValues.school_id = initialSchoolId ?? undefined;
         defaultValues.assigned_classes_ids = tp.assigned_classes?.map(String) || [];
         defaultValues.subject_expertise_ids = tp.subject_expertise?.map(String) || [];
         defaultValues.interested_in_tuition = tp.interested_in_tuition || false;
@@ -228,7 +200,9 @@ export default function ProfilePage() {
         defaultValues.address = pp.address || '';
         currentProfilePictureUrl = pp.profile_picture_url || null;
       }
+
       form.reset(defaultValues); 
+      if (initialSchoolId) setSelectedSchoolId(initialSchoolId);
       if (currentProfilePictureUrl) {
         setPreviewProfilePicture(currentProfilePictureUrl);
       }
@@ -253,7 +227,6 @@ export default function ProfilePage() {
 
     const formData = new FormData();
     
-    // Base user fields
     if (data.username && data.username.trim() && data.username.trim() !== currentUser.username) {
       formData.append('username', data.username.trim());
     }
@@ -265,21 +238,18 @@ export default function ProfilePage() {
     }
 
     Object.entries(data).forEach(([key, value]) => {
-      // Skip fields that are handled separately or shouldn't be sent
       const fieldsToSkip = ['profile_picture', 'username', 'email', 'currentPassword', 'newPassword', 'confirmNewPassword'];
       if (fieldsToSkip.includes(key) || value === undefined) {
         return;
       }
       
       if (Array.isArray(value)) {
-        // For M2M fields like assigned_classes_ids, subject_expertise_ids
         value.forEach(item => formData.append(key, item));
       } else if (value === null) {
         formData.append(key, '');
       } else if (typeof value === 'boolean') {
         formData.append(key, String(value));
       } else {
-        // For all other types (string, number which gets coerced)
         formData.append(key, String(value));
       }
     });
@@ -290,7 +260,7 @@ export default function ProfilePage() {
     
     try {
       const updatedUserResponse = await api.patch<User>(`/users/${currentUser.id}/profile/`, formData, true); 
-      setCurrentUser(updatedUserResponse); // Update AuthContext with the full new user object
+      setCurrentUser(updatedUserResponse);
       
       if (updatedUserResponse.profile_completed === true) { 
         setNeedsProfileCompletion(false);
@@ -346,7 +316,27 @@ export default function ProfilePage() {
   const defaultAvatarText = (cardTitleName || 'U').charAt(0).toUpperCase();
   const avatarSrc = previewProfilePicture || `https://placehold.co/150x150.png?text=${defaultAvatarText}`;
   const isStudentEnrolled = !!currentUser?.student_profile?.enrolled_class;
+  
+  const getNextEnrollmentDate = () => {
+    if (!isStudentEnrolled) {
+        return null;
+    }
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    // The cutoff date is June 5th of the current year.
+    const cutoffDate = new Date(currentYear, 5, 5); // Month is 0-indexed, so 5 is June.
 
+    if (today < cutoffDate) {
+        // If today is before June 5th, the next enrollment is this year's June 5th.
+        return cutoffDate;
+    } else {
+        // If today is on or after June 5th, the next enrollment is next year's June 5th.
+        return new Date(currentYear + 1, 5, 5);
+    }
+  };
+
+  const nextEnrollmentDate = getNextEnrollmentDate();
+  const enrollmentChangeIsLocked = isStudentEnrolled && nextEnrollmentDate && new Date() < nextEnrollmentDate;
 
   return (
     <div className="max-w-3xl mx-auto space-y-10 p-4 md:p-6 my-8">
@@ -392,7 +382,6 @@ export default function ProfilePage() {
             </CardHeader>
             <Separator />
             <CardContent className="p-6 space-y-8">
-              {/* Basic Information Section */}
               <section>
                 <h3 className="text-xl font-semibold mb-4 flex items-center"><Edit3 className="mr-2 h-5 w-5 text-accent" /> Basic Information</h3>
                 <div className="space-y-4">
@@ -401,7 +390,6 @@ export default function ProfilePage() {
                 </div>
               </section>
               
-              {/* Role Specific Fields */}
               {currentUser.role === 'Student' && (
                 <section>
                   <Separator className="my-6"/>
@@ -410,21 +398,34 @@ export default function ProfilePage() {
                         <FormField control={form.control} name="full_name" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="nickname" render={({ field }) => (<FormItem><FormLabel>Nickname</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="school_id" render={({ field }) => (
-                            <FormItem><FormLabel>School</FormLabel>
-                                <Select onValueChange={(value) => { field.onChange(value); setSelectedSchoolId(value); form.setValue('enrolled_class_id', undefined); }} value={field.value ?? undefined}>
+                            <FormItem><FormLabel><SchoolIcon className="inline mr-1 h-4 w-4"/>School</FormLabel>
+                                <Select onValueChange={(value) => { field.onChange(value); setSelectedSchoolId(value); form.setValue('enrolled_class_id', undefined); }} value={field.value ?? undefined} disabled={enrollmentChangeIsLocked}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select school" /></SelectTrigger></FormControl>
                                 <SelectContent>{schools.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
                                 </Select><FormMessage />
                             </FormItem>)} />
-                        <FormField control={form.control} name="enrolled_class_id" render={({ field }) => (
-                            <FormItem><FormLabel>Enrolled Class</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value ?? undefined} disabled={!selectedSchoolId || classes.length === 0 || isStudentEnrolled}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
-                                <SelectContent>{classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
-                                </Select>
-                                {isStudentEnrolled && <p className="text-xs text-muted-foreground mt-1">Class enrollment is final for the year. Contact an admin to change.</p>}
-                                <FormMessage />
-                            </FormItem>)} />
+                        <FormItem><FormLabel>Enrolled Class</FormLabel>
+                          {isStudentEnrolled ? (
+                             <Alert variant="default" className="bg-blue-50 border-blue-200 dark:bg-blue-900/50 dark:border-blue-700">
+                              <AlertCircle className="h-4 w-4 text-blue-500" />
+                              <AlertTitle className="text-blue-700 dark:text-blue-300">
+                                Currently Enrolled: {currentUser.student_profile?.enrolled_class_name || 'N/A'}
+                              </AlertTitle>
+                              <AlertDescription className="text-xs text-blue-600 dark:text-blue-400">
+                                {enrollmentChangeIsLocked && nextEnrollmentDate ? `Next enrollment change available on ${format(nextEnrollmentDate, "MMMM d, yyyy")}.` : "You can now change your enrollment."}
+                                 <br/>To change earlier, please contact your school administrator.
+                              </AlertDescription>
+                            </Alert>
+                          ) : (
+                            <FormField control={form.control} name="enrolled_class_id" render={({ field }) => (
+                              <Select onValueChange={field.onChange} value={field.value ?? undefined} disabled={!selectedSchoolId || classes.length === 0}>
+                                  <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
+                                  <SelectContent>{classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+                              </Select>
+                            )} />
+                          )}
+                          <FormMessage />
+                        </FormItem>
                         <FormField control={form.control} name="admission_number" render={({ field }) => (<FormItem><FormLabel>Admission Number</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="date_of_birth" render={({ field }) => (<FormItem><FormLabel><CalendarClock className="inline mr-1 h-4 w-4"/>Date of Birth</FormLabel><FormControl><Input type="date" {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="place_of_birth" render={({ field }) => (<FormItem><FormLabel>Place of Birth</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
@@ -452,7 +453,7 @@ export default function ProfilePage() {
                      <div className="grid md:grid-cols-2 gap-x-6 gap-y-4">
                         <FormField control={form.control} name="full_name" render={({ field }) => (<FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} value={field.value ?? ""} /></FormControl><FormMessage /></FormItem>)} />
                         <FormField control={form.control} name="school_id" render={({ field }) => (
-                            <FormItem><FormLabel>School</FormLabel>
+                            <FormItem><FormLabel><SchoolIcon className="inline mr-1 h-4 w-4"/>School</FormLabel>
                                 <Select onValueChange={(value) => { field.onChange(value); setSelectedSchoolId(value); form.setValue('assigned_classes_ids', []); }} value={field.value ?? undefined}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select school" /></SelectTrigger></FormControl>
                                 <SelectContent>{schools.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
@@ -475,8 +476,8 @@ export default function ProfilePage() {
                         <div className="space-y-1 max-h-40 overflow-y-auto border p-2 rounded-md">
                         { Array.isArray(subjects) && subjects.length > 0 ? subjects.map(sub => (
                           <FormField key={sub.id} control={form.control} name="subject_expertise_ids"
-                              render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(String(sub.id))} onCheckedChange={(checked) => {return checked ? field.onChange([...(field.value || []), String(sub.id)]) : field.onChange((field.value || []).filter(v => v !== String(sub.id)))}} /></FormControl><FormLabel className="font-normal">{sub.name} {sub.class_obj_name ? `(${sub.class_obj_name})` : ''}</FormLabel></FormItem>)}/>
-                        )) : <p className="text-xs text-muted-foreground p-1">Loading subjects...</p>}
+                              render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0"><FormControl><Checkbox checked={field.value?.includes(String(sub.id))} onCheckedChange={(checked) => {return checked ? field.onChange([...(field.value || []), String(sub.id)]) : field.onChange((field.value || []).filter(v => v !== String(sub.id)))}} /></FormControl><FormLabel className="font-normal">{sub.name} {sub.master_class_name ? `(${sub.master_class_name})` : ''}</FormLabel></FormItem>)}/>
+                        )) : <p className="text-xs text-muted-foreground p-1">{selectedSchoolId ? "No subjects found for this school." : "Select a school to see subjects."}</p>}
                         </div>
                      </FormItem>
 
@@ -496,7 +497,6 @@ export default function ProfilePage() {
                   </section>
               )}
 
-              {/* Security Section */}
               <section>
                 <Separator className="my-6"/>
                 <h3 className="text-xl font-semibold mb-4 flex items-center"><Shield className="mr-2 h-5 w-5 text-accent" /> Security (Password Change)</h3>

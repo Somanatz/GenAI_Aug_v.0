@@ -4,7 +4,7 @@ export interface PostAttachment {
   id: number;
   file_url: string;
   file_name?: string;
-  file_type?: 'image' | 'file';
+  file_type?: 'image' | 'file' | 'pdf';
 }
 
 export interface ForumThread {
@@ -30,7 +30,7 @@ export interface ForumPost {
     thread: number;
     author: number;
     author_username: string;
-    author_avatar_url: string;
+    author_avatar_url: string | null;
     content: string;
     created_at: string;
     parent_post: number | null;
@@ -50,9 +50,10 @@ export interface Syllabus {
 export interface SchoolClass {
   id: string | number;
   school: number;
+  school_name?: string;
   master_class: number;
-  name: string; // Master class name, added from serializer
-  description?: string; // Master class description, added from serializer
+  name: string;
+  description?: string;
 }
 
 export interface School {
@@ -67,7 +68,7 @@ export interface School {
   principal_contact_number?: string;
   principal_email?: string;
   admin_user?: number;
-  syllabus?: Syllabus;
+  syllabus?: number; 
   student_count?: number;
   staff_count?: number;
   classes?: SchoolClass[];
@@ -146,6 +147,7 @@ export interface Subject {
   progress?: number;
   is_locked?: boolean; 
   master_class?: string | number; 
+  master_class_name?: string; 
   class_obj_name?: string;
   classId?: string | number;
 }
@@ -156,6 +158,7 @@ export interface Class { // This is now MasterClass template
   description?: string;
   subjects?: Subject[];
   syllabus?: number; 
+  school_name?: string; // Added to interface
 }
 
 
@@ -233,6 +236,7 @@ export interface User {
   teacher_profile?: TeacherProfileData | null;
   parent_profile?: ParentProfileData | null;
   profile_completed?: boolean;
+  date_joined?: string; // Add this to track enrollment date
 }
 
 

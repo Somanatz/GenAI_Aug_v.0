@@ -20,7 +20,7 @@ from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAdminUser, A
 from rest_framework.generics import ListAPIView
 from django_filters.rest_framework import DjangoFilterBackend 
 from django.http import JsonResponse 
-from django.db.models import Q, Exists, OuterRef
+from django.db.models import Q, Exists, OuterRef, F
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -28,11 +28,14 @@ from rest_framework.exceptions import PermissionDenied, NotFound, ValidationErro
 
 
 class ClassViewSet(viewsets.ModelViewSet):
-    queryset = Class.objects.all().select_related('syllabus')
     serializer_class = ClassSerializer
     permission_classes = [IsAuthenticatedOrReadOnly] 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['syllabus', 'name']
+
+    def get_queryset(self):
+        # Annotate with the school name for the student dashboard display logic
+        return Class.objects.all().select_related('syllabus').annotate(school_name=F('syllabus__schools__name'))
 
     def get_serializer_context(self):
         return {'request': self.request, **super().get_serializer_context()}

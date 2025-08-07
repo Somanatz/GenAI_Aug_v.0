@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import type { Class as ClassInterface, RecentActivity, StudentRecommendation } from '@/interfaces';
+import type { Subject as SubjectInterface, RecentActivity, StudentRecommendation, SchoolClass } from '@/interfaces';
 import { ResponsiveContainer, Bar, BarChart as RechartsBarChart, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, LineChart as RechartsLineChart, Line, CartesianGrid, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { format, subDays, eachDayOfInterval, addDays, differenceInCalendarDays } from 'date-fns';
@@ -84,15 +84,20 @@ export default function LearningSuggestions() {
       }
       
       // Step 3: If no recent recommendation, fetch data to generate a new one.
-      const [analytics, activities, lessons] = await Promise.all([
+      const [analytics, activities, schoolClass] = await Promise.all([
         api.get<AnalyticsData>('/progress-analytics/'),
         api.get<{results: RecentActivity[]}>(`/recent-activities/?user=${currentUser.id}&page_size=20`),
-        currentUser.student_profile?.enrolled_class ? api.get<ClassInterface>(`/classes/${currentUser.student_profile.enrolled_class}/`) : Promise.resolve(null),
+        currentUser.student_profile?.enrolled_class ? api.get<SchoolClass>(`/school-classes/${currentUser.student_profile.enrolled_class}/`) : Promise.resolve(null),
       ]);
       setAnalyticsData(analytics);
       const actualActivities = activities.results || [];
       setRecentActivities(actualActivities);
-      const lessonTitles = lessons?.subjects?.flatMap(s => s.lessons?.map(l => l.title) || []) || [];
+      
+      let lessonTitles: string[] = [];
+      if (schoolClass?.master_class) {
+        const subjectsResponse = await api.get<{results: SubjectInterface[]}>(`/subjects/?master_class=${schoolClass.master_class}`);
+        lessonTitles = (subjectsResponse.results || []).flatMap(s => s.lessons?.map(l => l.title) || []);
+      }
       setAvailableLessons(lessonTitles);
 
     } catch (err) {

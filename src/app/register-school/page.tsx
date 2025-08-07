@@ -1,4 +1,3 @@
-
 // src/app/register-school/page.tsx
 'use client';
 
@@ -73,16 +72,19 @@ export default function RegisterSchoolPage() {
 
   useEffect(() => {
     // Fetch all available syllabuses on component mount
-    api.get<Syllabus[]>('/syllabuses/').then(setSyllabuses)
-      .catch(err => toast({ title: "Error", description: "Could not load syllabuses.", variant: "destructive" }));
+    api.get<{results: Syllabus[]}>('/syllabuses/').then(response => {
+        setSyllabuses(response.results || []);
+    }).catch(err => toast({ title: "Error", description: "Could not load syllabuses.", variant: "destructive" }));
   }, [toast]);
 
   useEffect(() => {
     // When selectedSyllabusId changes, fetch the corresponding master classes
     if (selectedSyllabusId) {
       setIsLoadingClasses(true);
-      api.get<MasterClass[]>(`/master-classes/?syllabus_id=${selectedSyllabusId}`)
-        .then(setMasterClasses)
+      api.get<{results: MasterClass[] }>(`/master-classes/?syllabus_id=${selectedSyllabusId}`)
+        .then(response => {
+            setMasterClasses(response.results || []);
+        })
         .catch(err => toast({ title: "Error", description: "Could not load classes for the selected syllabus.", variant: "destructive" }))
         .finally(() => setIsLoadingClasses(false));
     } else {

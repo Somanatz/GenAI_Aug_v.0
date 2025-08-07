@@ -1,3 +1,4 @@
+
 from rest_framework import serializers
 from .models import (
     Class, Subject, Lesson, Quiz, Question, Choice, UserLessonProgress, 
@@ -147,13 +148,13 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class SubjectSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True, context={'request': serializers.CurrentUserDefault()}) 
-    class_obj_id = serializers.PrimaryKeyRelatedField(source='master_class', queryset=Class.objects.all(), write_only=True)
-    class_obj_name = serializers.CharField(source='master_class.name', read_only=True)
+    master_class_id = serializers.PrimaryKeyRelatedField(source='master_class', queryset=Class.objects.all(), write_only=True)
+    master_class_name = serializers.CharField(source='master_class.name', read_only=True)
     progress = serializers.SerializerMethodField()
 
     class Meta:
         model = Subject
-        fields = ['id', 'master_class', 'class_obj_id', 'class_obj_name', 'name', 'description', 'lessons', 'progress']
+        fields = ['id', 'master_class', 'master_class_id', 'master_class_name', 'name', 'description', 'lessons', 'progress']
         read_only_fields = ['master_class']
 
     def get_progress(self, obj):
@@ -177,13 +178,21 @@ class SubjectSerializer(serializers.ModelSerializer):
 
 class ClassSerializer(serializers.ModelSerializer): # This is now MasterClassSerializer
     subjects = SubjectSerializer(many=True, read_only=True, context={'request': serializers.CurrentUserDefault()}) 
+    school_name = serializers.SerializerMethodField() # Added this
     syllabus_name = serializers.CharField(source='syllabus.name', read_only=True, allow_null=True)
     syllabus_id = serializers.PrimaryKeyRelatedField(source='syllabus', queryset=Syllabus.objects.all(), allow_null=True, required=False, write_only=True)
 
     class Meta:
         model = Class
-        fields = ['id', 'name', 'description', 'subjects', 'syllabus', 'syllabus_id', 'syllabus_name']
+        fields = ['id', 'name', 'description', 'subjects', 'syllabus', 'syllabus_id', 'syllabus_name', 'school_name']
         read_only_fields = ['syllabus']
+
+    def get_school_name(self, obj):
+        # This is a bit of a workaround since a MasterClass isn't tied to ONE school
+        # It's better to get the school name from the SchoolClass instance when possible
+        # This will return the name of the first school it finds offering this class.
+        school = obj.schools_offering.first()
+        return school.name if school else None
 
 
 class UserLessonProgressSerializer(serializers.ModelSerializer):
@@ -210,7 +219,7 @@ class BookSerializer(serializers.ModelSerializer):
     class_name = serializers.CharField(source='master_class.name', read_only=True, allow_null=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True, allow_null=True)
     file_url = serializers.SerializerMethodField()
-    class_obj_id = serializers.PrimaryKeyRelatedField(queryset=Class.objects.all(), source='master_class', write_only=True, allow_null=True, required=False)
+    master_class_id = serializers.PrimaryKeyRelatedField(queryset=Class.objects.all(), source='master_class', write_only=True, allow_null=True, required=False)
     subject_id = serializers.PrimaryKeyRelatedField(queryset=Subject.objects.all(), source='subject', write_only=True, allow_null=True, required=False)
 
     class Meta:
@@ -218,7 +227,7 @@ class BookSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'author', 'file', 'file_url', 
             'subject', 'subject_name', 'subject_id',
-            'master_class', 'class_name', 'class_obj_id'
+            'master_class', 'class_name', 'master_class_id'
         ]
         read_only_fields = ['subject', 'master_class']
         extra_kwargs = {'file': {'write_only': True} }
@@ -324,4 +333,3 @@ class StudentResourceSerializer(serializers.ModelSerializer):
         if resource_type == 'NOTE' and not content:
             raise serializers.ValidationError({"content": "Content is required for the 'Note' resource type."})
         return data
-

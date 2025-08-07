@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import type { Class as ClassInterface, Subject as SubjectInterface } from '@/interfaces';
+import type { Class as ClassInterface, Subject as SubjectInterface, SchoolClass } from '@/interfaces';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -33,7 +33,8 @@ const getIconForSubject = (subjectName: string): LucideIcon => {
 
 export default function MySubjectsPage() {
   const { currentUser } = useAuth();
-  const [classes, setClasses] = useState<ClassInterface[]>([]);
+  const [enrolledClass, setEnrolledClass] = useState<SchoolClass | null>(null);
+  const [subjects, setSubjects] = useState<SubjectInterface[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,18 +55,22 @@ export default function MySubjectsPage() {
           setIsLoading(false);
           return;
         }
-
-        // Fetch only the student's enrolled class, which should contain the relevant subjects with progress
-        const classData = await api.get<ClassInterface>(`/classes/${enrolledClassId}/`);
         
-        // The subjects are nested in the class data, let's process them
-        const subjectsWithIcons = (classData.subjects || []).map(subject => ({
-          ...subject,
-          icon: getIconForSubject(subject.name),
-        }));
+        // Correctly fetch the SchoolClass instance first
+        const schoolClassData = await api.get<SchoolClass>(`/school-classes/${enrolledClassId}/`);
+        setEnrolledClass(schoolClassData);
         
-        classData.subjects = subjectsWithIcons;
-        setClasses([classData]);
+        if (schoolClassData && schoolClassData.master_class) {
+          // Then fetch the subjects for that master_class
+          const subjectResponse = await api.get<{results: SubjectInterface[]}>(`/subjects/?master_class=${schoolClassData.master_class}`);
+          const subjectsWithIcons = (subjectResponse.results || []).map(subject => ({
+            ...subject,
+            icon: getIconForSubject(subject.name),
+          }));
+          setSubjects(subjectsWithIcons);
+        } else {
+          setSubjects([]);
+        }
 
       } catch (err) {
         console.error("Failed to fetch subjects:", err);
@@ -101,7 +106,7 @@ export default function MySubjectsPage() {
           <AlertTitle>Error Loading Subjects</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      ) : classes.length === 0 ? (
+      ) : !enrolledClass ? (
         <Card className="text-center py-10">
             <CardHeader>
                 <CardTitle>No Subjects Found</CardTitle>
@@ -109,12 +114,11 @@ export default function MySubjectsPage() {
             </CardHeader>
         </Card>
       ) : (
-        classes.map(cls => (
-          <section key={cls.id} className="space-y-6">
-            <h2 className="text-2xl font-semibold border-b pb-2">{cls.name}</h2>
-            {cls.subjects && cls.subjects.length > 0 ? (
+          <section key={enrolledClass.id} className="space-y-6">
+            <h2 className="text-2xl font-semibold border-b pb-2">{enrolledClass.name}</h2>
+            {subjects && subjects.length > 0 ? (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {cls.subjects.map(subject => (
+                    {subjects.map(subject => (
                         <Card key={subject.id} className="flex flex-col shadow-md hover:shadow-xl hover:border-primary/30 transition-all duration-200">
                            <CardHeader>
                             <div className="flex items-center gap-3">
@@ -134,7 +138,7 @@ export default function MySubjectsPage() {
                                     <Progress value={subject.progress || 0} className="h-2" />
                                 </div>
                                 <Button asChild className="w-full">
-                                    <Link href={`/student/learn/class/${cls.id}/subject/${subject.id}`}>
+                                    <Link href={`/student/learn/class/${enrolledClass.id}/subject/${subject.id}`}>
                                         Go to Subject
                                     </Link>
                                 </Button>
@@ -146,7 +150,6 @@ export default function MySubjectsPage() {
                 <p className="text-muted-foreground">No subjects found for this class.</p>
             )}
           </section>
-        ))
       )}
     </div>
   );
