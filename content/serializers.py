@@ -4,7 +4,7 @@ from .models import (
     Class, Subject, Lesson, Quiz, Question, Choice, UserLessonProgress, 
     ProcessedNote, Book, UserQuizAttempt, Reward, UserReward, Checkpoint, 
     AILessonQuizAttempt, UserNote, TranslatedLessonContent, AILessonSummary,
-    StudentResource
+    StudentResource, ManualReport
 )
 from accounts.models import School, Syllabus # Import School model
 
@@ -178,7 +178,7 @@ class SubjectSerializer(serializers.ModelSerializer):
 
 class ClassSerializer(serializers.ModelSerializer): # This is now MasterClassSerializer
     subjects = SubjectSerializer(many=True, read_only=True, context={'request': serializers.CurrentUserDefault()}) 
-    school_name = serializers.SerializerMethodField() # Added this
+    school_name = serializers.SerializerMethodField() 
     syllabus_name = serializers.CharField(source='syllabus.name', read_only=True, allow_null=True)
     syllabus_id = serializers.PrimaryKeyRelatedField(source='syllabus', queryset=Syllabus.objects.all(), allow_null=True, required=False, write_only=True)
 
@@ -242,14 +242,15 @@ class BookSerializer(serializers.ModelSerializer):
 
 class UserQuizAttemptSerializer(serializers.ModelSerializer):
     quiz_title = serializers.CharField(source='quiz.title', read_only=True)
+    quiz_details = QuizSerializer(source='quiz', read_only=True)
     lesson_title = serializers.CharField(source='quiz.lesson.title', read_only=True)
     user_username = serializers.CharField(source='user.username', read_only=True)
     answers = serializers.JSONField(required=True, write_only=True)
 
     class Meta:
         model = UserQuizAttempt
-        fields = ['id', 'user', 'user_username', 'quiz', 'quiz_title', 'lesson_title', 'score', 'completed_at', 'passed', 'answers']
-        read_only_fields = ['user', 'quiz', 'completed_at', 'score', 'passed']
+        fields = ['id', 'user', 'user_username', 'quiz', 'quiz_title', 'lesson_title', 'score', 'completed_at', 'passed', 'answers', 'quiz_details']
+        read_only_fields = ['user', 'quiz', 'completed_at', 'score', 'passed', 'quiz_details']
 
     def create(self, validated_data):
         return super().create(validated_data)
@@ -282,12 +283,14 @@ class CheckpointSerializer(serializers.ModelSerializer):
         read_only_fields = ['user_id', 'lesson', 'created_at']
 
 class AILessonQuizAttemptSerializer(serializers.ModelSerializer):
-    lesson = serializers.PrimaryKeyRelatedField(queryset=Lesson.objects.all(), write_only=True)
+    lesson_id = serializers.PrimaryKeyRelatedField(source='lesson', queryset=Lesson.objects.all(), write_only=True)
+    lesson_title = serializers.CharField(source='lesson.title', read_only=True)
+    lesson_subject_name = serializers.CharField(source='lesson.subject.name', read_only=True)
     
     class Meta:
         model = AILessonQuizAttempt
-        fields = ['id', 'user', 'lesson', 'score', 'passed', 'quiz_data', 'attempted_at', 'can_reattempt_at']
-        read_only_fields = ['user', 'attempted_at', 'can_reattempt_at']
+        fields = ['id', 'user', 'lesson', 'lesson_id', 'lesson_title', 'lesson_subject_name', 'score', 'passed', 'quiz_data', 'attempted_at', 'can_reattempt_at']
+        read_only_fields = ['user', 'lesson_title', 'lesson_subject_name', 'attempted_at', 'can_reattempt_at']
 
 class UserNoteSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.username')
@@ -333,3 +336,12 @@ class StudentResourceSerializer(serializers.ModelSerializer):
         if resource_type == 'NOTE' and not content:
             raise serializers.ValidationError({"content": "Content is required for the 'Note' resource type."})
         return data
+
+class ManualReportSerializer(serializers.ModelSerializer):
+    student_username = serializers.CharField(source='student.username', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = ManualReport
+        fields = '__all__'
+        read_only_fields = ('created_by', 'school', 'grade')

@@ -1,4 +1,3 @@
-
 // src/app/teacher/students/page.tsx
 'use client';
 
@@ -10,12 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, PlusCircle, Search, MoreHorizontal, Eye, Edit, MessageSquare, Loader2 } from "lucide-react";
+import { Users, PlusCircle, Search, MoreHorizontal, Eye, BarChart3, MessageSquare, Loader2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/AuthContext';
-import type { User, UserLessonProgress } from '@/interfaces';
+import type { User as UserInterface, UserLessonProgress } from '@/interfaces';
 
 interface DisplayStudent {
   id: string | number;
@@ -47,33 +46,39 @@ export default function ManageStudentsPage() {
       setError(null);
       try {
         const schoolId = currentUser.teacher_profile.school;
-        // Fetch all students for the school
-        const usersData = await api.get<User[]>(`/users/?school=${schoolId}&role=Student&page_size=1000`);
         
-        // This is inefficient for large schools. A dedicated summary endpoint would be better.
-        // For now, fetching all progress for all students in the school.
-        const allProgressData = await api.get<UserLessonProgress[]>(`/userprogress/?lesson__subject__class_obj__school=${schoolId}`);
-        const allLessonsData = await api.get<any[]>(`/lessons/?subject__class_obj__school=${schoolId}`);
+        // Fetch all students belonging to the teacher's school
+        const studentsResponse = await api.get<{ results: UserInterface[] }>(`/users/?role=Student&school=${schoolId}&page_size=200`);
+        const usersData = studentsResponse.results || [];
 
-        const progressByUser = new Map<number, number[]>();
+        const allProgressDataResponse = await api.get<{results: UserLessonProgress[]}>(`/userprogress/?lesson__subject__master_class__syllabus__schools=${schoolId}&page_size=1000`);
+        const allProgressData = allProgressDataResponse.results || [];
+        
+        const allLessonsDataResponse = await api.get<{results: any[]}>(`/lessons/?subject__master_class__syllabus__schools=${schoolId}&page_size=1000`);
+        const allLessonsData = allLessonsDataResponse.results || [];
+
+        const progressByUser = new Map<number, Set<number>>();
         allProgressData.forEach(p => {
             if (p.completed) {
-                if (!progressByUser.has(p.user)) progressByUser.set(p.user, []);
-                progressByUser.get(p.user)?.push(p.lesson);
+                if (!progressByUser.has(p.user)) progressByUser.set(p.user, new Set());
+                progressByUser.get(p.user)?.add(p.lesson);
             }
         });
         
-        const totalLessonsByUser = new Map<number, number>();
-        usersData.forEach(user => {
-            if (user.student_profile?.enrolled_class) {
-                const classLessons = allLessonsData.filter(l => String(l.subject.class_obj) === String(user.student_profile?.enrolled_class));
-                totalLessonsByUser.set(user.id, classLessons.length);
+        const totalLessonsByClass = new Map<number, number>();
+         usersData.forEach(user => {
+            const enrolledClassId = user.student_profile?.enrolled_class;
+            if (enrolledClassId && !totalLessonsByClass.has(Number(enrolledClassId))) {
+                 const classDetails = user.student_profile?.enrolled_class_details;
+                 const classLessons = allLessonsData.filter(l => String(l.subject?.master_class) === String(classDetails?.master_class));
+                 totalLessonsByClass.set(Number(enrolledClassId), classLessons.length);
             }
         });
 
         const transformedStudents: DisplayStudent[] = usersData.map(user => {
-            const completedCount = progressByUser.get(user.id)?.length || 0;
-            const totalLessons = totalLessonsByUser.get(user.id) || 0;
+            const completedCount = progressByUser.get(user.id)?.size || 0;
+            const enrolledClassId = user.student_profile?.enrolled_class;
+            const totalLessons = enrolledClassId ? totalLessonsByClass.get(Number(enrolledClassId)) || 0 : 0;
             const overallProgress = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
             return {
@@ -84,7 +89,7 @@ export default function ManageStudentsPage() {
                 class_name: user.student_profile?.enrolled_class_name,
                 overallProgress: overallProgress,
                 avatarUrl: user.student_profile?.profile_picture_url,
-                lastLogin: 'N/A', // This requires backend implementation
+                lastLogin: 'N/A', 
             };
         });
 
@@ -109,7 +114,7 @@ export default function ManageStudentsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center"><Users className="mr-3 text-primary" /> Manage Students</h1>
-          <p className="text-muted-foreground">View, edit, and manage student profiles and progress.</p>
+          <p className="text-muted-foreground">View, edit, and manage student profiles and progress in your classes.</p>
         </div>
         <Button size="lg" onClick={() => alert("Add New Student - To be implemented")}>
           <PlusCircle className="mr-2 h-5 w-5" /> Add New Student
@@ -139,7 +144,9 @@ export default function ManageStudentsPage() {
           ) : error ? (
              <p className="text-red-500 text-center py-4">{error}</p>
           ) : filteredStudents.length === 0 ? (
-            <p className="text-muted-foreground text-center py-4">No students found{searchTerm && ' matching your search'}.</p>
+            <p className="text-muted-foreground text-center py-4">
+              {students.length === 0 ? "You are not assigned to any classes or your classes have no students." : "No students found matching your search."}
+            </p>
           ) : (
             <div className="overflow-x-auto rounded-md border">
               <Table>
@@ -182,8 +189,12 @@ export default function ManageStudentsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => alert('Feature TBI')}><Eye className="mr-2 h-4 w-4" /> View Profile</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => alert(`Edit student ${student.id} - TBI`)}><Edit className="mr-2 h-4 w-4" /> Edit Details</DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                                <Link href={`/teacher/students/${student.id}`}><Eye className="mr-2 h-4 w-4" /> View Profile</Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                               <Link href={`/teacher/analytics/${student.id}`}><BarChart3 className="mr-2 h-4 w-4" /> View Progress</Link>
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => alert(`Message student ${student.id} - TBI`)}><MessageSquare className="mr-2 h-4 w-4" /> Send Message</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

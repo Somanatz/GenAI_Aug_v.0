@@ -274,3 +274,44 @@ class StudentResource(models.Model):
 
     def __str__(self):
         return f"'{self.title}' for {self.student.username}"
+
+class ManualReport(models.Model):
+    """
+    A report manually created by a teacher for a student.
+    """
+    TEST_TYPE_CHOICES = [
+        ('SLIP_TEST', 'Slip Test'),
+        ('UNIT_TEST', 'Unit Test'),
+        ('QUARTERLY', 'Quarterly'),
+        ('ANNUAL', 'Annual'),
+    ]
+    
+    student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='manual_reports')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_reports', limit_choices_to={'role__in': ['Teacher', 'Admin']})
+    school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='manual_reports')
+    subject_name = models.CharField(max_length=100)
+    test_name = models.CharField(max_length=255)
+    test_type = models.CharField(max_length=20, choices=TEST_TYPE_CHOICES)
+    score = models.FloatField()
+    max_score = models.FloatField(default=100.0)
+    grade = models.CharField(max_length=5, blank=True)
+    remarks = models.TextField(blank=True)
+    report_date = models.DateField()
+
+    class Meta:
+        ordering = ['-report_date']
+
+    def __str__(self):
+        return f"Report for {self.student.username} in {self.subject_name} ({self.report_date})"
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate grade if not provided
+        if not self.grade:
+            percentage = (self.score / self.max_score) * 100
+            if percentage >= 90: self.grade = 'A+'
+            elif percentage >= 80: self.grade = 'A'
+            elif percentage >= 70: self.grade = 'B'
+            elif percentage >= 60: self.grade = 'C'
+            elif percentage >= 50: self.grade = 'D'
+            else: self.grade = 'F'
+        super().save(*args, **kwargs)

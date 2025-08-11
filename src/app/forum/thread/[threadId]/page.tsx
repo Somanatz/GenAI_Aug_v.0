@@ -205,9 +205,8 @@ export default function ThreadDetailPage() {
                         </div>
                       </CardHeader>
                       <CardContent className="p-4 pt-0">
-                              {/* FIX: Get attachments from the initialPost object, not the top-level thread */}
-                              <AttachmentDisplay attachments={initialPost.attachments} />
                               <p className="whitespace-pre-wrap mt-4">{initialPost.content}</p>
+                              <AttachmentDisplay attachments={initialPost.attachments} />
                               <div className="flex items-center gap-2 mt-4 pt-4 border-t">
                                <Button variant="ghost" size="sm" onClick={() => handleLike(initialPost.id)}>
                                 <ThumbsUp className={cn("mr-2 h-4 w-4", initialPost.is_liked_by_user && 'text-primary fill-primary')} /> Like ({initialPost.like_count})

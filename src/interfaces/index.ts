@@ -292,7 +292,7 @@ export interface Event {
 
 export interface StudentTask {
   id: number;
-  user: number;
+  student: number;
   title: string;
   description?: string;
   due_date: string;
@@ -344,6 +344,8 @@ export interface AILessonQuizAttempt {
   id: number;
   user: number;
   lesson: number;
+  lesson_title: string;
+  lesson_subject_name: string;
   score: number;
   passed: boolean;
   quiz_data: any;
@@ -376,6 +378,9 @@ export interface Checkpoint {
 
 export interface RecentActivity {
     id: number;
+    user: number;
+    user_username: string;
+    user_avatar_url?: string;
     activity_type: string;
     details: string;
     timestamp: string;
@@ -386,4 +391,25 @@ export interface StudentRecommendation {
     student: number;
     recommendation_data: any; // The full JSON output from the AI
     created_at: string;
+}
+
+export interface ManualReport {
+    id: number;
+    student: number;
+    subject_name: string;
+    test_name: string;
+    test_type: 'SLIP_TEST' | 'UNIT_TEST' | 'QUARTERLY' | 'ANNUAL';
+    score: number;
+    max_score: number;
+    grade: string;
+    remarks: string;
+    report_date: string;
+}
+export interface UserDailyActivity {
+    id: number;
+    user: number;
+    date: string;
+    study_duration_minutes: number;
+    library_study_duration_minutes: number;
+    present: boolean;
 }

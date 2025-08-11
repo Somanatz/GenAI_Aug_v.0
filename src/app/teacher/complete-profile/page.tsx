@@ -1,4 +1,3 @@
-
 // src/app/teacher/complete-profile/page.tsx
 'use client';
 
@@ -19,7 +18,7 @@ import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2, UserCheck, Upload, School as SchoolIcon } from 'lucide-react';
-import type { School as SchoolInterface, Class as ClassInterface, Subject as SubjectInterface, User } from '@/interfaces';
+import type { School as SchoolInterface, SchoolClass as SchoolClassInterface, Subject as SubjectInterface, User } from '@/interfaces';
 
 const teacherProfileSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
@@ -40,7 +39,7 @@ export default function CompleteTeacherProfilePage() {
   const { currentUser, isLoadingAuth, setCurrentUser } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [schools, setSchools] = useState<SchoolInterface[]>([]);
-  const [classes, setClasses] = useState<ClassInterface[]>([]);
+  const [classes, setClasses] = useState<SchoolClassInterface[]>([]);
   const [subjects, setSubjects] = useState<SubjectInterface[]>([]);
   const [selectedSchoolId, setSelectedSchoolId] = useState<string | undefined>(undefined);
   const [previewProfilePicture, setPreviewProfilePicture] = useState<string | null>(null);
@@ -66,7 +65,6 @@ export default function CompleteTeacherProfilePage() {
       } else if (currentUser.role !== 'Teacher') {
         router.push('/');
       }
-      // No longer redirecting away if profile is "complete"
     }
   }, [isLoadingAuth, currentUser, router]);
 
@@ -76,12 +74,7 @@ export default function CompleteTeacherProfilePage() {
             const data = Array.isArray(res) ? res : res.results || [];
             setSchools(data);
         }).catch(err => toast({ title: "Error", description: "Could not load schools.", variant: "destructive" }));
-
-        api.get<SubjectInterface[]|{results: SubjectInterface[]}>('/subjects/').then(res => { // Fetch all subjects initially
-            const data = Array.isArray(res) ? res : res.results || [];
-            setSubjects(data);
-        }).catch(err => toast({ title: "Error", description: "Could not load subjects.", variant: "destructive" }));
-
+        
         const tp = currentUser.teacher_profile;
         if (tp) {
             form.reset({
@@ -110,26 +103,39 @@ export default function CompleteTeacherProfilePage() {
   }, [currentUser, form, toast, isLoadingAuth]);
 
   useEffect(() => {
-    const fetchClassesForSchool = async (schoolIdValue: string) => {
+    const fetchSchoolData = async (schoolIdValue: string) => {
         if (!schoolIdValue) {
             setClasses([]);
+            setSubjects([]);
             form.setValue("assigned_classes_ids", []);
+            form.setValue("subject_expertise_ids", []);
             return;
         }
         try {
-            const classResponse = await api.get<{ results: ClassInterface[] } | ClassInterface[]>(`/classes/?school=${schoolIdValue}`);
+            const [classResponse, subjectResponse] = await Promise.all([
+              api.get<{ results: SchoolClassInterface[] } | SchoolClassInterface[]>(`/school-classes/?school=${schoolIdValue}`),
+              api.get<{ results: SubjectInterface[] } | SubjectInterface[]>(`/subjects/?master_class__syllabus__schools=${schoolIdValue}`)
+            ]);
+            
             const classData = Array.isArray(classResponse) ? classResponse : classResponse.results || [];
             setClasses(classData);
+
+            const subjectData = Array.isArray(subjectResponse) ? subjectResponse : subjectResponse.results || [];
+            setSubjects(subjectData);
+
         } catch (error) {
-            toast({ title: "Error", description: "Could not load classes for selected school.", variant: "destructive" });
+            toast({ title: "Error", description: "Could not load classes or subjects for selected school.", variant: "destructive" });
             setClasses([]);
+            setSubjects([]);
         }
     };
     if (selectedSchoolId) {
-        fetchClassesForSchool(selectedSchoolId);
+        fetchSchoolData(selectedSchoolId);
     } else {
         setClasses([]);
+        setSubjects([]);
         form.setValue("assigned_classes_ids", []);
+        form.setValue("subject_expertise_ids", []);
     }
   }, [selectedSchoolId, toast, form]);
 
@@ -148,6 +154,8 @@ export default function CompleteTeacherProfilePage() {
 
     const formData = new FormData();
     
+    formData.append('profile_completed', 'true'); 
+
     Object.entries(data).forEach(([key, value]) => {
       if (key === 'profile_picture' || value === undefined) {
         return;
@@ -168,9 +176,6 @@ export default function CompleteTeacherProfilePage() {
       formData.append('profile_picture', selectedProfilePictureFile);
     }
     
-    // Backend will set profile_completed=true on successful update with required fields
-    // formData.append('profile_completed', 'true'); 
-
     try {
       const updatedUserResponse = await api.patch<User>(`/users/${currentUser.id}/profile/`, formData, true);
       setCurrentUser(updatedUserResponse); 
@@ -202,7 +207,7 @@ export default function CompleteTeacherProfilePage() {
       <Card className="w-full max-w-2xl shadow-xl">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">Teacher Profile Information</CardTitle>
-          <CardDescription className="text-center">Complete or update your teaching details.</CardDescription>
+          <CardDescription className="text-center">Complete your teaching details to access your dashboard.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -283,11 +288,11 @@ export default function CompleteTeacherProfilePage() {
                                                         : field.onChange(currentValues.filter( (value) => value !== String(sub.id) ) );
                                                 }} />
                                         </FormControl>
-                                        <FormLabel className="font-normal">{sub.name} {sub.class_obj_name ? `(${sub.class_obj_name})` : ''}</FormLabel>
+                                        <FormLabel className="font-normal">{sub.name} {sub.master_class_name ? `(${sub.master_class_name})` : ''}</FormLabel>
                                     </FormItem>
                                 )}
                             />
-                            )) : <p className="text-xs text-muted-foreground">Loading subjects...</p>}
+                            )) : <p className="text-xs text-muted-foreground">{selectedSchoolId ? "No subjects found for this school." : "Select a school to see subjects."}</p>}
                         </div>
                       <FormMessage />
                   </FormItem>

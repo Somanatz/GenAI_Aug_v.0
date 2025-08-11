@@ -5,14 +5,15 @@ from rest_framework.response import Response
 from .models import (
     Class, Subject, Lesson, Quiz, Question, Choice, UserLessonProgress, 
     UserQuizAttempt, Book, ProcessedNote, Reward, UserReward, Checkpoint, AILessonQuizAttempt,
-    UserNote, TranslatedLessonContent, AILessonSummary, StudentResource
+    UserNote, TranslatedLessonContent, AILessonSummary, StudentResource, ManualReport
 )
 from accounts.models import CustomUser, ParentStudentLink, StudentProfile, RecentActivity
 from .serializers import ( 
     ProcessedNoteSerializer, ClassSerializer, SubjectSerializer, LessonSerializer, BookSerializer, 
     UserLessonProgressSerializer, QuizSerializer, QuestionSerializer, ChoiceSerializer, UserQuizAttemptSerializer,
     RewardSerializer, UserRewardSerializer, CheckpointSerializer, AILessonQuizAttemptSerializer,
-    UserNoteSerializer, TranslatedLessonContentSerializer, AILessonSummarySerializer, StudentResourceSerializer
+    UserNoteSerializer, TranslatedLessonContentSerializer, AILessonSummarySerializer, StudentResourceSerializer,
+    ManualReportSerializer
 )
 from .services import check_and_award_rewards, get_reward_progress
 from accounts.permissions import IsTeacher, IsTeacherOrReadOnly, IsStudent, IsParent
@@ -588,6 +589,29 @@ class StudentResourceViewSet(viewsets.ModelViewSet):
             details=f"Viewed personal resource: '{resource.title}'"
         )
         return Response({'status': 'ok'}, status=status.HTTP_200_OK)
+
+class ManualReportViewSet(viewsets.ModelViewSet):
+    serializer_class = ManualReportSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['student', 'school', 'test_type', 'subject_name']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff: return ManualReport.objects.all()
+        if user.role == 'Student': return ManualReport.objects.filter(student=user)
+        if user.role == 'Teacher': return ManualReport.objects.filter(school=user.school)
+        if user.role == 'Parent':
+            child_ids = user.parent_links.values_list('student_id', flat=True)
+            return ManualReport.objects.filter(student_id__in=child_ids)
+        if user.is_school_admin: return ManualReport.objects.filter(school=user.school)
+        return ManualReport.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.role not in ['Teacher', 'Admin']:
+            raise PermissionDenied("You do not have permission to create reports.")
+        serializer.save(created_by=user, school=user.school)
 
 # AI-specific views
 @api_view(['POST'])

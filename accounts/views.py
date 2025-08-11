@@ -1,4 +1,3 @@
-
 from rest_framework import viewsets, status, generics, serializers as drf_serializers, permissions
 from rest_framework.generics import CreateAPIView, ListAPIView
 from .models import (
@@ -475,8 +474,8 @@ class ProgressAnalyticsView(generics.GenericAPIView):
         })
 
 
-class RecentActivityViewSet(viewsets.ModelViewSet): # Changed from ReadOnly
-    queryset = RecentActivity.objects.all()
+class RecentActivityViewSet(viewsets.ModelViewSet):
+    queryset = RecentActivity.objects.all().select_related('user').prefetch_related('user__student_profile')
     serializer_class = RecentActivitySerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
@@ -484,9 +483,19 @@ class RecentActivityViewSet(viewsets.ModelViewSet): # Changed from ReadOnly
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_staff or user.role == 'Admin':
+        if user.is_staff:
             return self.queryset
-        return self.queryset.filter(user=user)
+        if user.role == 'Admin' and user.school:
+            return self.queryset.filter(user__school=user.school)
+        if user.role == 'Teacher' and user.school:
+            student_ids = CustomUser.objects.filter(
+                school=user.school, 
+                student_profile__enrolled_class__in=user.teacher_profile.assigned_classes.all()
+            ).values_list('id', flat=True)
+            return self.queryset.filter(user_id__in=student_ids)
+        if user.role == 'Student':
+            return self.queryset.filter(user=user)
+        return self.queryset.none()
     
     def perform_create(self, serializer):
         # Ensure users can only create activities for themselves

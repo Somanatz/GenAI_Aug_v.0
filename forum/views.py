@@ -123,8 +123,8 @@ class ForumThreadViewSet(viewsets.ModelViewSet):
 
         uploaded_file = self.request.FILES.get('file')
         if uploaded_file:
-            # Attach to the thread directly since it's the initial post's attachment
-            PostAttachment.objects.create(thread=thread, uploader=user, file=uploaded_file)
+            # Attach to the initial_post, not the thread itself
+            PostAttachment.objects.create(post=initial_post, uploader=user, file=uploaded_file)
 
 
 class ForumPostViewSet(viewsets.ModelViewSet):
@@ -165,3 +165,4 @@ class ForumPostViewSet(viewsets.ModelViewSet):
             PostLike.objects.create(post=post, user=user)
             liked = True
         return Response({'status': 'ok', 'liked': liked}, status=status.HTTP_200_OK)
+

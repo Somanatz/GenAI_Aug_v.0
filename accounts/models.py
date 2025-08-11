@@ -68,7 +68,8 @@ class CustomUser(AbstractUser):
     is_school_admin = models.BooleanField(default=False, help_text="Designates if this admin user manages a specific school.")
     school = models.ForeignKey(School, on_delete=models.SET_NULL, null=True, blank=True, related_name='staff_and_students')
     is_verified = models.BooleanField(default=False, help_text="Designates whether the user has verified their email address.")
-    verification_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    verification_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, null=True)
+
     
     def __str__(self):
         return self.username
@@ -224,7 +225,7 @@ class StudentTask(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['due_date', 'completed']
+                ordering = ['due_date', 'created_at']
 
     def __str__(self):
         return f"Task for {self.student.username}: {self.title}"

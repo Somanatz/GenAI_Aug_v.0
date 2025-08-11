@@ -4,7 +4,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Award, MessageSquare, Lightbulb, BookOpen, UserCircle, Settings, CalendarDays, FileText, Library } from 'lucide-react';
+import { LayoutDashboard, Award, MessageSquare, Lightbulb, BookOpen, UserCircle, Settings, CalendarDays, FileText, Library, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   SidebarMenu,
@@ -15,7 +15,7 @@ import {
 const navItems = [
   { href: '/student', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/student/subjects', label: 'My Subjects', icon: BookOpen },
-  { href: '/student/progress', label: 'My Progress', icon: UserCircle },
+  { href: '/student/progress', label: 'My Progress', icon: BarChart3 },
   { href: '/student/rewards', label: 'Rewards', icon: Award },
   { href: '/student/recommendations', label: 'Suggestions', icon: Lightbulb },
   { href: '/student/view-my-report', label: 'My Reports', icon: FileText },

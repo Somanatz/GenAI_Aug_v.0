@@ -6,7 +6,8 @@ from .views import (
     dictionary_lookup, BookViewSet, UserLessonProgressViewSet, ai_note_taking, 
     ProcessedNoteViewSet, UserQuizAttemptViewSet, RewardViewSet, UserRewardViewSet, CheckpointViewSet,
     AILessonQuizAttemptViewSet, UserNoteViewSet, TranslatedLessonContentViewSet, AILessonSummaryViewSet,
-    StudentResourceViewSet, ai_summarize_lesson, ai_translate_lesson, RewardProgressView
+    StudentResourceViewSet, ai_summarize_lesson, ai_translate_lesson, RewardProgressView,
+    ManualReportViewSet
 )
 
 router = DefaultRouter()
@@ -28,6 +29,7 @@ router.register(r'usernotes', UserNoteViewSet, basename='usernote')
 router.register(r'translated-content', TranslatedLessonContentViewSet, basename='translatedcontent')
 router.register(r'ai-summaries', AILessonSummaryViewSet, basename='aisummary')
 router.register(r'student-resources', StudentResourceViewSet, basename='studentresource')
+router.register(r'manual-reports', ManualReportViewSet, basename='manualreport')
 
 
 urlpatterns = [

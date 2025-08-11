@@ -329,9 +329,22 @@ class ParentProfileCompletionSerializer(serializers.ModelSerializer):
         read_only_fields = ['user']
 
 class RecentActivitySerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    user_avatar_url = serializers.SerializerMethodField()
+
     class Meta:
         model = RecentActivity
-        fields = ['id', 'activity_type', 'details', 'timestamp']
+        fields = ['id', 'activity_type', 'details', 'timestamp', 'user_username', 'user_avatar_url']
+
+    def get_user_avatar_url(self, obj):
+        request = self.context.get('request')
+        user = obj.user
+        profile = getattr(user, 'student_profile', None) or \
+                  getattr(user, 'teacher_profile', None) or \
+                  getattr(user, 'parent_profile', None)
+        if profile and profile.profile_picture:
+            return request.build_absolute_uri(profile.profile_picture.url)
+        return None
 
 class SyllabusSerializer(serializers.ModelSerializer):
     class Meta:

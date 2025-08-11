@@ -1,16 +1,18 @@
-
 // src/components/dashboard/TeacherDashboard.tsx
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, BookOpenText, BarChartBig, CalendarCheck2, PlusCircle, FileText, CalendarDays, AlertTriangle, Loader2, MessageSquare, ActivityIcon, RefreshCw } from "lucide-react";
+import { Users, BookOpenText, BarChartBig, CalendarCheck2, PlusCircle, FileText, CalendarDays, AlertTriangle, Loader2, MessageSquare, ActivityIcon, RefreshCw, Eye } from "lucide-react";
 import Link from "next/link";
 import { api } from '@/lib/api';
-import type { Event as EventInterface, User as UserInterface, Subject as SubjectInterface } from '@/interfaces';
+import type { Event as EventInterface, User as UserInterface, RecentActivity } from '@/interfaces';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/AuthContext';
+import { formatDistanceToNow } from 'date-fns';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+
 
 interface Stat {
     title: string;
@@ -20,16 +22,6 @@ interface Stat {
     link: string;
     note?: string;
 }
-
-interface RecentActivity {
-  id: string; // Or number
-  description: string; // e.g., "Alex Johnson submitted Math Quiz 3."
-  timestamp: string; // e.g., "2024-07-20T10:30:00Z"
-  type: 'submission' | 'forum_post' | 'lesson_completion' | 'badge_earned';
-  studentName?: string;
-  link?: string; // Optional link to the activity
-}
-
 
 const quickLinks = [
     { href: "/teacher/students", label: "Manage Students", icon: Users },
@@ -48,19 +40,39 @@ export default function TeacherDashboard() {
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
 
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true);
+  const [activitiesError, setActivitiesError] = useState<string | null>(null);
+
   const fetchEvents = useCallback(async () => {
     if (!currentUser?.teacher_profile?.school) return;
     setIsLoadingEvents(true);
     setEventsError(null); 
     try {
       const schoolId = currentUser.teacher_profile.school;
-      const eventResponse = await api.get<EventInterface[]>(`/events/?school=${schoolId}&ordering=date`);
-      setEvents(eventResponse.filter(e => new Date(e.date) >= new Date()).slice(0, 5)); 
+      const eventResponse = await api.get<{results: EventInterface[]}>(`/events/?school=${schoolId}&ordering=date`);
+      const actualEvents = eventResponse.results || [];
+      setEvents(actualEvents.filter(e => new Date(e.date) >= new Date()).slice(0, 5)); 
     } catch (err) {
       console.error("Failed to fetch events:", err);
       setEventsError(err instanceof Error ? err.message : "Failed to load events"); 
     } finally {
       setIsLoadingEvents(false);
+    }
+  }, [currentUser]);
+
+  const fetchActivities = useCallback(async () => {
+    if (!currentUser?.teacher_profile) return;
+    setIsLoadingActivities(true);
+    setActivitiesError(null);
+    try {
+        const response = await api.get<{results: RecentActivity[]}>(`/recent-activities/`);
+        setRecentActivities(response.results || []);
+    } catch (err) {
+        console.error("Failed to fetch recent activities:", err);
+        setActivitiesError(err instanceof Error ? err.message : "Failed to load recent activities.");
+    } finally {
+        setIsLoadingActivities(false);
     }
   }, [currentUser]);
 
@@ -79,7 +91,7 @@ export default function TeacherDashboard() {
       try {
         const [studentCountData, subjectCountData] = await Promise.all([
           api.get<{ count: number }>(`/users/?school=${schoolId}&role=Student&page_size=1`),
-          api.get<{ count: number }>(`/subjects/?class_obj__school=${schoolId}&page_size=1`)
+          api.get<{ count: number }>(`/subjects/?master_class__schoolclass__school=${schoolId}&page_size=1`)
         ]);
 
         const fetchedStats: Stat[] = [
@@ -98,7 +110,21 @@ export default function TeacherDashboard() {
     };
     fetchDashboardData();
     fetchEvents();
-  }, [currentUser, fetchEvents]);
+    fetchActivities();
+  }, [currentUser, fetchEvents, fetchActivities]);
+
+  const uniqueRecentActivities = useMemo(() => {
+    const uniqueStudentIds = new Set<number>();
+    const uniqueActivities: RecentActivity[] = [];
+    for (const activity of recentActivities) {
+        if (!uniqueStudentIds.has(activity.user)) {
+            uniqueActivities.push(activity);
+            uniqueStudentIds.add(activity.user);
+        }
+        if (uniqueActivities.length >= 6) break;
+    }
+    return uniqueActivities;
+  }, [recentActivities]);
 
   return (
     <div className="space-y-8">
@@ -142,12 +168,33 @@ export default function TeacherDashboard() {
       <div className="grid gap-8 md:grid-cols-3">
         <Card className="md:col-span-2 shadow-md rounded-xl">
           <CardHeader>
-            <CardTitle className="flex items-center"><ActivityIcon className="mr-2 text-primary"/>Recent Activity</CardTitle>
+             <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center"><ActivityIcon className="mr-2 text-primary"/>Recent Student Activity</CardTitle>
+                 <Button variant="ghost" size="icon" onClick={fetchActivities} disabled={isLoadingActivities}>
+                    <RefreshCw className={`h-4 w-4 ${isLoadingActivities ? 'animate-spin' : ''}`} />
+                </Button>
+            </div>
             <CardDescription>Overview of recent student submissions and interactions.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground text-center py-4">No recent student activities to display. (Feature in development)</p>
-            <Button variant="outline" className="mt-6 w-full" disabled>View All Activities</Button>
+             {isLoadingActivities ? <div className="space-y-2">{[...Array(4)].map((_,i) => <Skeleton key={i} className="h-12 w-full"/>)}</div> :
+              activitiesError ? <p className="text-destructive text-sm"><AlertTriangle className="inline mr-1 h-4 w-4" /> {activitiesError}</p> :
+              uniqueRecentActivities.length > 0 ? (
+                <div className="space-y-3">
+                    {uniqueRecentActivities.map(activity => (
+                        <div key={activity.id} className="flex items-start gap-3 p-2 border-b last:border-0">
+                            <Avatar className="h-9 w-9 mt-1"><AvatarImage src={activity.user_avatar_url} /><AvatarFallback>{activity.user_username.charAt(0)}</AvatarFallback></Avatar>
+                            <div className="flex-1">
+                                <p className="text-sm"><span className="font-semibold">{activity.user_username}</span> {activity.details}</p>
+                                <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+              ) : <p className="text-sm text-muted-foreground text-center py-4">No recent student activities to display.</p>}
+            <Button variant="outline" className="mt-6 w-full" asChild>
+                <Link href="/teacher/students"><Eye className="mr-2 h-4 w-4"/>View All Students</Link>
+            </Button>
           </CardContent>
         </Card>
 

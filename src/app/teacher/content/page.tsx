@@ -10,7 +10,6 @@ import Link from "next/link";
 import { api } from '@/lib/api';
 import type { LessonSummary, Quiz as QuizInterface, Book } from '@/interfaces'; // Assuming Book interface exists
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 interface ContentItem {
   id: string | number;
@@ -37,13 +36,19 @@ export default function ContentManagementPage() {
       try {
         // TODO: Filter by teacher's school/classes if applicable
         const [lessonsData, quizzesData, booksData] = await Promise.all([
-          api.get<LessonSummary[]>('/lessons/'), 
-          api.get<QuizInterface[]>('/quizzes/'), 
-          api.get<Book[]>('/books/')
+          api.get<LessonSummary[] | {results: LessonSummary[]}>('/lessons/'), 
+          api.get<QuizInterface[] | {results: QuizInterface[]}>('/quizzes/'), 
+          api.get<Book[] | {results: Book[]}>('/books/')
         ]);
-        setLessons(lessonsData.slice(0, 5)); // Show recent 5 for overview
-        setQuizzes(quizzesData.slice(0, 5));
-        setBooks(booksData.slice(0,5));
+
+        const getResults = <T,>(response: T[] | { results: T[] }): T[] => {
+            return Array.isArray(response) ? response : response.results || [];
+        };
+
+        setLessons(getResults(lessonsData).slice(0, 5)); // Show recent 5 for overview
+        setQuizzes(getResults(quizzesData).slice(0, 5));
+        setBooks(getResults(booksData).slice(0,5));
+
       } catch (err) {
         console.error("Failed to fetch content:", err);
         setError(err instanceof Error ? err.message : "Failed to load content data.");
