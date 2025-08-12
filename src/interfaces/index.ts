@@ -98,6 +98,7 @@ export interface LessonSummary {
   video_url?: string;
   audio_url?: string;
   image_url?: string;
+  subject_name?: string;
 }
 
 export interface Choice {
@@ -161,6 +162,13 @@ export interface Class { // This is now MasterClass template
   school_name?: string; // Added to interface
 }
 
+export interface ClassLevelDisplay {
+  id: string | number;
+  level: number;
+  title: string;
+  subjects: Subject[];
+}
+
 
 export type UserRole = 'Student' | 'Teacher' | 'Parent' | 'Admin';
 
@@ -174,6 +182,7 @@ export interface StudentProfileData {
     school_name?: string | null; 
     enrolled_class?: string | number | null; 
     enrolled_class_name?: string | null; 
+    enrolled_class_details?: SchoolClass;
     nickname?: string | null;
     preferred_language?: string | null;
     father_name?: string | null;
@@ -201,7 +210,7 @@ export interface TeacherProfileData {
     school?: string | number | null; 
     school_name?: string | null;
     assigned_classes?: (string | number)[]; 
-    assigned_classes_details?: { id: string | number, name: string }[]; 
+    assigned_classes_details?: { id: string | number, name: string, master_class: string | number }[]; 
     subject_expertise?: (string | number)[]; 
     subject_expertise_details?: { id: string | number, name: string }[]; 
     interested_in_tuition?: boolean;
@@ -237,6 +246,7 @@ export interface User {
   parent_profile?: ParentProfileData | null;
   profile_completed?: boolean;
   date_joined?: string; // Add this to track enrollment date
+  last_login?: string | null;
 }
 
 
@@ -300,6 +310,18 @@ export interface StudentTask {
   created_at: string;
   updated_at: string;
 }
+
+export interface TeacherTask {
+  id: number;
+  teacher: number;
+  title: string;
+  description?: string;
+  due_date: string;
+  completed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 
 export interface Reward {
     id: number;

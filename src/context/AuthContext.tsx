@@ -4,7 +4,7 @@
 
 import type { User } from '@/interfaces';
 import type { Dispatch, ReactNode, SetStateAction} from 'react';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { fetchCurrentUser, logoutUser as apiLogout } from '@/lib/api';
 
 interface AuthContextType {
@@ -13,7 +13,7 @@ interface AuthContextType {
   isLoadingAuth: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
-  // needsProfileCompletion and setNeedsProfileCompletion are removed
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  const processUserData = (userData: User | null): User | null => {
+  const processUserData = useCallback((userData: User | null): User | null => {
     if (!userData) return null;
 
     let profileActuallyCompleted = false;
@@ -36,10 +36,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profileActuallyCompleted = true;
     }
     
-    const userWithCompletionFlag = { ...userData, profile_completed: profileActuallyCompleted };
-    console.log("AuthContext: processUserData - User with completion flag:", userWithCompletionFlag);
-    return userWithCompletionFlag;
-  };
+    // Create a new object to ensure re-render
+    return { ...userData, profile_completed: profileActuallyCompleted };
+  }, []);
+  
+  const refreshUser = useCallback(async () => {
+    try {
+        const rawUserData = await fetchCurrentUser();
+        const processedUser = processUserData(rawUserData);
+        setCurrentUser(processedUser);
+    } catch (error) {
+        console.error("Failed to refresh user data:", error);
+        logout();
+    }
+  }, [processUserData]);
+
+  const updateUserAndContext = useCallback((rawUserData: User) => {
+    const processedUser = processUserData(rawUserData);
+    setCurrentUser(processedUser);
+  }, [processUserData]);
 
 
   useEffect(() => {
@@ -49,19 +64,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token) {
         try {
           const rawUserData = await fetchCurrentUser();
-          console.log("AuthContext: initializeAuth - Raw user data from API:", rawUserData);
-          const processedUser = processUserData(rawUserData);
-          setCurrentUser(processedUser);
+          if (rawUserData) {
+            updateUserAndContext(rawUserData);
+          } else {
+            logout();
+          }
         } catch (error) {
           console.error("Initialization auth error:", error);
-          apiLogout();
-          setCurrentUser(null);
+          logout();
         }
       }
       setIsLoadingAuth(false);
     };
     initializeAuth();
-  }, []);
+  }, [updateUserAndContext]);
 
 
   const login = async (token: string) => {
@@ -69,16 +85,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('authToken', token);
     try {
       const rawUserData = await fetchCurrentUser();
-      console.log("AuthContext: login - Raw user data from API:", rawUserData);
-      const processedUser = processUserData(rawUserData);
-      setCurrentUser(processedUser);
-       if (!processedUser) {
+      if (rawUserData) {
+        updateUserAndContext(rawUserData);
+      } else {
         throw new Error("Failed to process user data after login.");
       }
     } catch (error) {
         console.error("Login error:", error);
-        apiLogout(); 
-        setCurrentUser(null);
+        logout();
         throw error; 
     } finally {
         setIsLoadingAuth(false);
@@ -95,10 +109,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ 
       currentUser, 
-      setCurrentUser, 
+      setCurrentUser: updateUserAndContext, // Use the wrapped setter
       isLoadingAuth,
       login,
       logout,
+      refreshUser,
     }}>
       {children}
     </AuthContext.Provider>

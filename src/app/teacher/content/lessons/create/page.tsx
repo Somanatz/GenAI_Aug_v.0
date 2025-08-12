@@ -1,4 +1,3 @@
-
 // src/app/teacher/content/lessons/create/page.tsx
 'use client';
 
@@ -11,13 +10,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, BookOpen, PlusCircle } from 'lucide-react';
-import type { Subject as SubjectInterface, Class as ClassInterface, School } from '@/interfaces';
+import type { Subject as SubjectInterface, SchoolClass, User } from '@/interfaces';
+import { useAuth } from '@/context/AuthContext';
 
 const lessonSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
@@ -29,9 +29,7 @@ const lessonSchema = z.object({
   lesson_order: z.coerce.number().min(0).default(0),
   requires_previous_quiz: z.boolean().default(false),
   subject_id: z.string().min(1, "Subject is required"),
-  // Optional: class_id and school_id for filtering subjects
-  class_id: z.string().optional(),
-  school_id: z.string().optional(),
+  class_id: z.string().optional(), // This is for filtering only
 });
 
 type LessonCreateFormValues = z.infer<typeof lessonSchema>;
@@ -39,14 +37,13 @@ type LessonCreateFormValues = z.infer<typeof lessonSchema>;
 export default function CreateLessonPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { currentUser } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [schools, setSchools] = useState<School[]>([]);
-  const [classes, setClasses] = useState<ClassInterface[]>([]);
+  
+  const assignedClasses = currentUser?.teacher_profile?.assigned_classes_details || [];
   const [subjects, setSubjects] = useState<SubjectInterface[]>([]);
   
-  const [selectedSchool, setSelectedSchool] = useState<string | null>(null);
-  const [selectedClass, setSelectedClass] = useState<string | null>(null);
-
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
 
   const form = useForm<LessonCreateFormValues>({
     resolver: zodResolver(lessonSchema),
@@ -62,58 +59,30 @@ export default function CreateLessonPage() {
   });
 
   useEffect(() => {
-    api.get<School[] | {results: School[]}>('/schools/').then(res => {
-      const data = Array.isArray(res) ? res : res.results || [];
-      setSchools(data);
-    }).catch(err => toast({ title: "Error", description: "Failed to load schools", variant: "destructive"}));
-  }, [toast]);
-
-  useEffect(() => {
-    if (selectedSchool) {
-      api.get<ClassInterface[] | {results: ClassInterface[]}>(`/classes/?school=${selectedSchool}`)
+    // Ensure we only fetch subjects if a valid class ID is selected
+    if (selectedClassId && selectedClassId !== 'undefined' && selectedClassId !== null) {
+      api.get<{results: SubjectInterface[]}>(`/subjects/?master_class=${selectedClassId}`)
         .then(res => {
-          const data = Array.isArray(res) ? res : res.results || [];
-          setClasses(data);
-        })
-        .catch(err => toast({ title: "Error", description: "Failed to load classes for school", variant: "destructive"}));
-      setSubjects([]); // Reset subjects when school changes
-      form.resetField("class_id");
-      form.resetField("subject_id");
-    } else {
-      setClasses([]);
-      setSubjects([]);
-    }
-  }, [selectedSchool, toast, form]);
-
-  useEffect(() => {
-    if (selectedClass) {
-      api.get<SubjectInterface[] | {results: SubjectInterface[]}>(`/subjects/?class_obj=${selectedClass}`)
-        .then(res => {
-          const data = Array.isArray(res) ? res : res.results || [];
-          setSubjects(data);
+          const subjectData = Array.isArray(res) ? res : res.results || [];
+          setSubjects(subjectData);
         })
         .catch(err => toast({ title: "Error", description: "Failed to load subjects for class", variant: "destructive"}));
       form.resetField("subject_id");
     } else {
       setSubjects([]);
     }
-  }, [selectedClass, toast, form]);
+  }, [selectedClassId, toast, form]);
 
 
   const onSubmit = async (data: LessonCreateFormValues) => {
     setIsLoading(true);
     try {
-      const payload = {
-        ...data,
-        subject: data.subject_id, // API expects 'subject' not 'subject_id'
-      };
-      // delete payload.subject_id; // Not needed as serializer uses source='subject'
-      delete payload.class_id; // Not part of Lesson model
-      delete payload.school_id; // Not part of Lesson model
+      const payload = { ...data, subject: data.subject_id };
+      delete (payload as any).class_id;
 
       await api.post('/lessons/', payload);
       toast({ title: "Lesson Created!", description: `${data.title} has been successfully created.` });
-      router.push('/teacher/content'); // Or to the lesson detail page
+      router.push('/teacher/content'); 
     } catch (error: any) {
       toast({ title: "Lesson Creation Failed", description: error.message || "Could not create lesson.", variant: "destructive" });
     } finally {
@@ -131,38 +100,35 @@ export default function CreateLessonPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField control={form.control} name="school_id" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>School for this Lesson</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); setSelectedSchool(value);}} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select school" /></SelectTrigger></FormControl>
-                    <SelectContent>{schools.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
-                  </Select><FormMessage />
-                </FormItem>)} />
-              
-              <FormField control={form.control} name="class_id" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Class for this Lesson</FormLabel>
-                  <Select onValueChange={(value) => { field.onChange(value); setSelectedClass(value);}} value={field.value} disabled={!selectedSchool || classes.length === 0}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
-                    <SelectContent>{classes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
-                  </Select><FormMessage />
-                </FormItem>)} />
+               <div className="grid md:grid-cols-2 gap-4">
+                 <FormField control={form.control} name="class_id" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Class for this Lesson</FormLabel>
+                        <Select onValueChange={(value) => { field.onChange(value); setSelectedClassId(value);}} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                {assignedClasses && assignedClasses.length > 0 ? assignedClasses.map(c => 
+                                    <SelectItem key={c.id} value={String(c.master_class)}>{c.name}</SelectItem>
+                                ) : <div className="text-center text-xs text-muted-foreground p-2">No classes assigned.</div>}
+                            </SelectContent>
+                        </Select><FormMessage />
+                    </FormItem>)} />
 
-              <FormField control={form.control} name="subject_id" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Subject for this Lesson</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClass || subjects.length === 0}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger></FormControl>
-                    <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
-                  </Select><FormMessage />
-                </FormItem>)} />
+                <FormField control={form.control} name="subject_id" render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Subject for this Lesson</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClassId || subjects.length === 0}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger></FormControl>
+                        <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent>
+                    </Select><FormMessage />
+                    </FormItem>)} />
+               </div>
 
               <FormField control={form.control} name="title" render={({ field }) => (
                 <FormItem><FormLabel>Lesson Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="content" render={({ field }) => (
-                <FormItem><FormLabel>Main Content (Text, HTML)</FormLabel><FormControl><Textarea rows={8} {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Main Content (Text, HTML, or JSON)</FormLabel><FormControl><Textarea rows={8} {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="video_url" render={({ field }) => (
                 <FormItem><FormLabel>Video URL (Optional)</FormLabel><FormControl><Input type="url" {...field} /></FormControl><FormMessage /></FormItem>

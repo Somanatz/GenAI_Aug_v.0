@@ -1,3 +1,4 @@
+
 // src/app/teacher/students/page.tsx
 'use client';
 
@@ -15,6 +16,7 @@ import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/AuthContext';
 import type { User as UserInterface, UserLessonProgress } from '@/interfaces';
+import { formatDistanceToNow } from 'date-fns';
 
 interface DisplayStudent {
   id: string | number;
@@ -23,7 +25,7 @@ interface DisplayStudent {
   full_name?: string | null;
   class_name?: string | null;
   overallProgress: number;
-  lastLogin?: string; // This would require backend tracking
+  lastLogin?: string | null;
   avatarUrl?: string;
 }
 
@@ -89,7 +91,7 @@ export default function ManageStudentsPage() {
                 class_name: user.student_profile?.enrolled_class_name,
                 overallProgress: overallProgress,
                 avatarUrl: user.student_profile?.profile_picture_url,
-                lastLogin: 'N/A', 
+                lastLogin: user.last_login, 
             };
         });
 
@@ -179,7 +181,9 @@ export default function ManageStudentsPage() {
                           {student.overallProgress}%
                         </Badge>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell text-center text-muted-foreground">{student.lastLogin}</TableCell>
+                      <TableCell className="hidden md:table-cell text-center text-muted-foreground">
+                        {student.lastLogin ? formatDistanceToNow(new Date(student.lastLogin), { addSuffix: true }) : 'Never'}
+                      </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

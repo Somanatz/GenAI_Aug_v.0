@@ -1,3 +1,4 @@
+
 // src/components/dashboard/TeacherDashboard.tsx
 'use client';
 
@@ -7,12 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Users, BookOpenText, BarChartBig, CalendarCheck2, PlusCircle, FileText, CalendarDays, AlertTriangle, Loader2, MessageSquare, ActivityIcon, RefreshCw, Eye } from "lucide-react";
 import Link from "next/link";
 import { api } from '@/lib/api';
-import type { Event as EventInterface, User as UserInterface, RecentActivity } from '@/interfaces';
+import type { Event as EventInterface, User as UserInterface, RecentActivity, SchoolClass, Subject as SubjectInterface, TeacherTask } from '@/interfaces';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/context/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-
+import ClassSection from './ClassSection';
+import { getIconForSubject } from '@/lib/utils'; // Import helper
+import type { ClassLevelDisplay, UserRole } from '@/interfaces';
 
 interface Stat {
     title: string;
@@ -43,6 +46,10 @@ export default function TeacherDashboard() {
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(true);
   const [activitiesError, setActivitiesError] = useState<string | null>(null);
+  
+  const [classData, setClassData] = useState<ClassLevelDisplay[]>([]); 
+  const [isLoadingCurriculum, setIsLoadingCurriculum] = useState(true);
+  const [curriculumError, setCurriculumError] = useState<string|null>(null);
 
   const fetchEvents = useCallback(async () => {
     if (!currentUser?.teacher_profile?.school) return;
@@ -62,7 +69,7 @@ export default function TeacherDashboard() {
   }, [currentUser]);
 
   const fetchActivities = useCallback(async () => {
-    if (!currentUser?.teacher_profile) return;
+    if (!currentUser?.teacher_profile?.school) return;
     setIsLoadingActivities(true);
     setActivitiesError(null);
     try {
@@ -76,6 +83,62 @@ export default function TeacherDashboard() {
     }
   }, [currentUser]);
 
+  const fetchCurriculum = useCallback(async () => {
+    if (!currentUser?.teacher_profile?.assigned_classes_details || currentUser.teacher_profile.assigned_classes_details.length === 0) {
+        setIsLoadingCurriculum(false);
+        return;
+    }
+    setIsLoadingCurriculum(true);
+    setCurriculumError(null);
+
+    try {
+        const teacherProfile = currentUser.teacher_profile;
+        const assignedClasses = teacherProfile.assigned_classes_details || [];
+        const expertiseSubjectIds = new Set((teacherProfile.subject_expertise_details || []).map(sub => sub.id));
+        
+        const curriculumDataPromises = assignedClasses.map(async (schoolClass) => {
+            const schoolClassDetails = await api.get<SchoolClass>(`/school-classes/${schoolClass.id}/`);
+            if (!schoolClassDetails || !schoolClassDetails.master_class) return null;
+
+            const subjectsResponse = await api.get<{results: SubjectInterface[]}>(`/subjects/?master_class=${schoolClassDetails.master_class}`);
+            const allSubjectsForClass = subjectsResponse.results || [];
+            
+            const relevantSubjects = expertiseSubjectIds.size > 0 
+              ? allSubjectsForClass.filter(sub => expertiseSubjectIds.has(sub.id))
+              : allSubjectsForClass;
+
+            if (relevantSubjects.length === 0) return null;
+
+            const transformedSubjects = relevantSubjects.map(sub => ({
+                id: String(sub.id), name: sub.name, icon: getIconForSubject(sub.name),
+                description: sub.description, 
+                lessonsCount: (sub.lessons || []).length,
+                href: `/teacher/learn/class/${schoolClass.id}/subject/${sub.id}`,
+            }));
+            
+            const levelMatch = schoolClass.name.match(/\d+/);
+            const level = levelMatch ? parseInt(levelMatch[0], 10) : 0;
+            
+            return {
+                id: schoolClass.id,
+                title: `${currentUser.school_name} (${schoolClass.name})`,
+                level: level,
+                subjects: transformedSubjects
+            };
+        });
+
+        const resolvedCurriculumData = (await Promise.all(curriculumDataPromises)).filter(Boolean) as ClassLevelDisplay[];
+        setClassData(resolvedCurriculumData);
+
+    } catch (err) {
+        setCurriculumError(err instanceof Error ? err.message : "Failed to load curriculum data.");
+        console.error(err);
+    } finally {
+        setIsLoadingCurriculum(false);
+    }
+  }, [currentUser]);
+
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!currentUser || !currentUser.teacher_profile?.school) {
@@ -83,22 +146,25 @@ export default function TeacherDashboard() {
         setStatsError("Teacher profile is not associated with a school.");
         return;
       }
-      const schoolId = currentUser.teacher_profile.school;
+      const assignedSubjects = classData.flatMap(c => c.subjects);
+      const totalLessons = assignedSubjects.reduce((sum, s) => sum + (s.lessonsCount || 0), 0);
 
-      // Fetch Stats
       setIsLoadingStats(true);
       setStatsError(null);
       try {
-        const [studentCountData, subjectCountData] = await Promise.all([
-          api.get<{ count: number }>(`/users/?school=${schoolId}&role=Student&page_size=1`),
-          api.get<{ count: number }>(`/subjects/?master_class__schoolclass__school=${schoolId}&page_size=1`)
+        const [studentCountData, teacherTasksData, performanceData] = await Promise.all([
+          api.get<{ count: number }>(`/users/?school=${currentUser.teacher_profile.school}&role=Student&page_size=1`),
+          api.get<{ results: TeacherTask[] }>(`/teacher-tasks/`),
+          api.get<{ average_performance: number }>(`/teacher-analytics/class-performance/`)
         ]);
 
+        const pendingTasks = (teacherTasksData.results || []).filter(t => !t.completed).length;
+
         const fetchedStats: Stat[] = [
-            { title: "Total Students", value: studentCountData.count, icon: Users, color: "text-primary", link: "/teacher/students", note: "In your school" }, 
-            { title: "Active Courses", value: subjectCountData.count, icon: BookOpenText, color: "text-accent", link: "/teacher/content", note:"Subjects across all classes"}, 
-            { title: "Pending Reviews", value: 0, icon: CalendarCheck2, color: "text-orange-500", link: "#", note:"(Feature in development)"}, 
-            { title: "Overall Performance", value: "N/A", icon: BarChartBig, color: "text-green-500", link: "/teacher/analytics", note:"(Feature in development)"}, 
+            { title: "Total Students", value: studentCountData.count, icon: Users, color: "text-primary", link: "/teacher/students", note: "In your classes" }, 
+            { title: "Active Courses", value: assignedSubjects.length, icon: BookOpenText, color: "text-accent", link: "/teacher/content", note: `${totalLessons} total lessons`}, 
+            { title: "My Tasks", value: pendingTasks, icon: CalendarCheck2, color: "text-orange-500", link: "/teacher/calendar", note:"Pending tasks"}, 
+            { title: "Student Performance", value: `${performanceData.average_performance.toFixed(1)}%`, icon: BarChartBig, color: "text-green-500", link: "/teacher/analytics", note:"Avg. class score"}, 
         ];
         setStats(fetchedStats);
       } catch (err) {
@@ -108,10 +174,20 @@ export default function TeacherDashboard() {
         setIsLoadingStats(false);
       }
     };
-    fetchDashboardData();
-    fetchEvents();
-    fetchActivities();
-  }, [currentUser, fetchEvents, fetchActivities]);
+    if (currentUser?.profile_completed) {
+      if (classData.length > 0 || !isLoadingCurriculum) { 
+        fetchDashboardData();
+      }
+      fetchEvents();
+      fetchActivities();
+    }
+  }, [currentUser, classData, isLoadingCurriculum, fetchEvents, fetchActivities]);
+
+  useEffect(() => {
+     if (currentUser?.profile_completed) {
+       fetchCurriculum();
+     }
+  }, [currentUser, fetchCurriculum]);
 
   const uniqueRecentActivities = useMemo(() => {
     const uniqueStudentIds = new Set<number>();
@@ -165,6 +241,36 @@ export default function TeacherDashboard() {
         ))}
       </div>
 
+       <section>
+        <h2 className="text-2xl font-semibold mb-4">My Curriculum</h2>
+        {isLoadingCurriculum ? (
+             <div className="space-y-6">
+                <Skeleton className="h-10 w-1/3 rounded-lg" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-xl" />)}
+                </div>
+            </div>
+        ) : curriculumError ? (
+             <p className="text-destructive text-sm"><AlertTriangle className="inline mr-1 h-4 w-4" /> {curriculumError}</p>
+        ) : classData.length > 0 ? (
+          classData.map((classLevel) => (
+            <ClassSection key={classLevel.id} classLevelData={classLevel} userRole="Teacher" />
+          ))
+        ) : (
+          <Card className="text-center py-10">
+            <CardHeader>
+              <CardTitle>No Assigned Classes Found</CardTitle>
+              <CardDescription>It looks like you haven't been assigned to any classes or subjects yet.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild>
+                <Link href="/profile">Update Your Profile & Assignments</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </section>
+
       <div className="grid gap-8 md:grid-cols-3">
         <Card className="md:col-span-2 shadow-md rounded-xl">
           <CardHeader>
@@ -174,7 +280,7 @@ export default function TeacherDashboard() {
                     <RefreshCw className={`h-4 w-4 ${isLoadingActivities ? 'animate-spin' : ''}`} />
                 </Button>
             </div>
-            <CardDescription>Overview of recent student submissions and interactions.</CardDescription>
+            <CardDescription>A quick look at the latest student interactions from your classes.</CardDescription>
           </CardHeader>
           <CardContent>
              {isLoadingActivities ? <div className="space-y-2">{[...Array(4)].map((_,i) => <Skeleton key={i} className="h-12 w-full"/>)}</div> :

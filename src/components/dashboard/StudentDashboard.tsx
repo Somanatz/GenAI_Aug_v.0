@@ -224,7 +224,7 @@ export default function StudentDashboard() {
             </CardHeader>
           </Card>
           {classData.map((classLevel) => (
-            <ClassSection key={classLevel.id} classLevelData={classLevel} />
+            <ClassSection key={classLevel.id} classLevelData={classLevel} userRole="Student" />
           ))}
         </>
       ) : (

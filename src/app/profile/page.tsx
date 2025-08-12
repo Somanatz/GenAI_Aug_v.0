@@ -95,7 +95,7 @@ const profileSchema = baseProfileSchema.merge(studentSpecificSchema).merge(teach
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function ProfilePage() {
-  const { currentUser, isLoadingAuth, setCurrentUser, logout, setNeedsProfileCompletion } = useAuth();
+  const { currentUser, isLoadingAuth, setCurrentUser, logout } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPageLoading, setIsPageLoading] = useState(true);
@@ -262,9 +262,6 @@ export default function ProfilePage() {
       const updatedUserResponse = await api.patch<User>(`/users/${currentUser.id}/profile/`, formData, true); 
       setCurrentUser(updatedUserResponse);
       
-      if (updatedUserResponse.profile_completed === true) { 
-        setNeedsProfileCompletion(false);
-      }
       toast({ title: "Profile Updated", description: "Your profile information has been successfully updated." });
       
       let newProfilePicUrl = null;

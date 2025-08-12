@@ -1,11 +1,14 @@
+
 from rest_framework import viewsets, status, generics, serializers as drf_serializers, permissions
 from rest_framework.generics import CreateAPIView, ListAPIView
+from rest_framework.views import APIView
 from .models import (
     CustomUser, ParentStudentLink, School, StudentProfile, TeacherProfile, 
     ParentProfile, UserDailyActivity, UserLoginActivity, UserSubjectStudy, 
-    RecentActivity, Syllabus, SchoolClass, StudentRecommendation, StudentTask
+    RecentActivity, Syllabus, SchoolClass, StudentRecommendation, StudentTask,
+    TeacherTask
 )
-from content.models import Class as MasterClass, Subject as ContentSubject, Lesson, AILessonQuizAttempt, UserLessonProgress
+from content.models import Class as MasterClass, Subject as ContentSubject, Lesson, AILessonQuizAttempt, UserLessonProgress, UserQuizAttempt
 from content.services import check_and_award_rewards
 from rest_framework.decorators import action, api_view, permission_classes as dec_permission_classes, parser_classes
 import django_filters.rest_framework
@@ -17,7 +20,7 @@ from .serializers import (
     SchoolSerializer, StudentProfileSerializer, TeacherProfileSerializer, ParentProfileSerializer,
     StudentProfileCompletionSerializer, TeacherProfileCompletionSerializer, ParentProfileCompletionSerializer,
     RecentActivitySerializer, SyllabusSerializer, SchoolClassSerializer, StudentRecommendationSerializer,
-    UserDailyActivitySerializer, StudentTaskSerializer
+    UserDailyActivitySerializer, StudentTaskSerializer, TeacherTaskSerializer
 )
 from content.serializers import ClassSerializer as MasterClassSerializer
 from .permissions import IsParent, IsTeacher, IsTeacherOrReadOnly, IsAdminOfThisSchoolOrPlatformStaff, IsStudent
@@ -25,7 +28,7 @@ from rest_framework.exceptions import PermissionDenied, NotFound, ValidationErro
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from django.utils import timezone
-from django.db.models import F, Sum, OuterRef, Subquery, Count
+from django.db.models import F, Sum, OuterRef, Subquery, Count, Avg
 from django.db import models as db_models
 from datetime import timedelta, datetime
 
@@ -91,6 +94,11 @@ class LoginView(ObtainAuthToken):
         user = serializer.validated_data['user']
         if not user.is_active:
             raise ValidationError("User account is not active. Please verify your email first.")
+        
+        # Manually update last_login timestamp
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+        
         token, created = Token.objects.get_or_create(user=user)
         
         if user.role == 'Student':
@@ -102,24 +110,15 @@ class LoginView(ObtainAuthToken):
         return Response({'token': token.key})
 
 class StudentRecommendationViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint for storing and retrieving student AI recommendations.
-    """
     queryset = StudentRecommendation.objects.all()
     serializer_class = StudentRecommendationSerializer
     permission_classes = [IsAuthenticated, IsStudent]
 
     def get_queryset(self):
-        """
-        This view should only return recommendations for the currently authenticated user.
-        """
         user = self.request.user
         return self.queryset.filter(student=user).order_by('-created_at')
 
     def perform_create(self, serializer):
-        """
-        When a new recommendation is created, it's associated with the current user.
-        """
         serializer.save(student=self.request.user)
 
 class SchoolViewSet(viewsets.ModelViewSet):
@@ -138,7 +137,7 @@ class SchoolViewSet(viewsets.ModelViewSet):
             self.permission_classes = [permissions.IsAuthenticated, IsAdminOfThisSchoolOrPlatformStaff]
         elif self.action == 'destroy':
             self.permission_classes = [permissions.IsAdminUser] 
-        else: # list, retrieve
+        else:
             self.permission_classes = [permissions.IsAuthenticatedOrReadOnly]
         return super().get_permissions()
 
@@ -159,12 +158,11 @@ class MasterClassListView(ListAPIView):
 
 class SchoolClassListView(viewsets.ReadOnlyModelViewSet):
     serializer_class = SchoolClassSerializer
-    permission_classes = [IsAuthenticated] # Or AllowAny if needed for public viewing
+    permission_classes = [IsAuthenticated]
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
     filterset_fields = ['school']
 
     def get_queryset(self):
-        # Returns the instances of classes offered by a specific school
         return SchoolClass.objects.all().select_related('master_class')
 
 
@@ -173,7 +171,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
     filterset_fields = ['role', 'username', 'email', 'school'] 
-    parser_classes = [MultiPartParser, FormParser] 
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_context(self):
         return {'request': self.request, **super().get_serializer_context()}
@@ -199,54 +197,51 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], url_path='profile', permission_classes=[IsAuthenticated])
     def update_profile(self, request, pk=None):
         user = self.get_object()
-        if user != request.user and not request.user.is_staff: 
+        if user != request.user and not request.user.is_staff:
             raise PermissionDenied("You can only update your own profile or you lack staff permissions.")
 
-        profile_data_from_request = request.data.copy()
+        profile_data = request.data.dict()
+        if 'assigned_classes_ids' in request.data:
+            profile_data['assigned_classes_ids'] = request.data.getlist('assigned_classes_ids')
+        if 'subject_expertise_ids' in request.data:
+            profile_data['subject_expertise_ids'] = request.data.getlist('subject_expertise_ids')
         
         custom_user_update_data = {}
-        if 'username' in profile_data_from_request and profile_data_from_request['username'] and profile_data_from_request['username'] != user.username:
-            username_val = profile_data_from_request.pop('username')
-            custom_user_update_data['username'] = (username_val[0] if isinstance(username_val, list) else username_val)
+        if 'username' in profile_data and profile_data['username'] and profile_data['username'] != user.username:
+            custom_user_update_data['username'] = profile_data.pop('username')
         
-        if 'email' in profile_data_from_request and profile_data_from_request['email'] != user.email:
-            email_val = profile_data_from_request.pop('email')
-            custom_user_update_data['email'] = (email_val[0] if isinstance(email_val, list) else email_val) or ""
+        if 'email' in profile_data and profile_data['email'] != user.email:
+            custom_user_update_data['email'] = profile_data.pop('email', "")
 
-
-        if 'password' in profile_data_from_request and profile_data_from_request['password']:
-            password_val = profile_data_from_request.pop('password')
-            custom_user_update_data['password'] = (password_val[0] if isinstance(password_val, list) else password_val)
+        if 'password' in profile_data and profile_data['password']:
+            custom_user_update_data['password'] = profile_data.pop('password')
         
         if custom_user_update_data:
             user_serializer = CustomUserSerializer(user, data=custom_user_update_data, partial=True, context=self.get_serializer_context())
-            if user_serializer.is_valid():
-                user_serializer.save()
-            else:
-                return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            user_serializer.is_valid(raise_exception=True)
+            user_serializer.save()
 
         profile_serializer_class = None
         profile_instance = None
         
-        profile_specific_data = profile_data_from_request 
         if 'profile_picture' in request.FILES:
-            profile_specific_data['profile_picture'] = request.FILES['profile_picture']
+            profile_data['profile_picture'] = request.FILES['profile_picture']
 
         if user.role == 'Student':
             profile_serializer_class = StudentProfileCompletionSerializer
             profile_instance, _ = StudentProfile.objects.get_or_create(user=user)
-            if 'school_id' in profile_specific_data and profile_specific_data['school_id']:
+            if 'school_id' in profile_data and profile_data['school_id']:
                 try:
-                    user.school = School.objects.get(pk=profile_specific_data['school_id'])
+                    user.school = School.objects.get(pk=profile_data['school_id'])
                     user.save(update_fields=['school'])
                 except School.DoesNotExist:
-                    pass 
+                    pass
         elif user.role == 'Teacher':
             profile_serializer_class = TeacherProfileCompletionSerializer
             profile_instance, _ = TeacherProfile.objects.get_or_create(user=user)
-            if 'school_id' in profile_specific_data and profile_specific_data['school_id']:
+            if 'school_id' in profile_data and profile_data['school_id']:
                 try:
-                    user.school = School.objects.get(pk=profile_specific_data['school_id'])
+                    user.school = School.objects.get(pk=profile_data['school_id'])
                     user.save(update_fields=['school'])
                 except School.DoesNotExist:
                     pass
@@ -255,16 +250,13 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             profile_instance, _ = ParentProfile.objects.get_or_create(user=user)
         
         if profile_serializer_class and profile_instance:
-            if request.path.endswith('/complete-profile/'): 
-                 profile_specific_data['profile_completed'] = True
+            profile_data['profile_completed'] = True
+            
+            profile_serializer = profile_serializer_class(profile_instance, data=profile_data, partial=True, context=self.get_serializer_context())
+            profile_serializer.is_valid(raise_exception=True)
+            profile_serializer.save()
 
-            profile_serializer = profile_serializer_class(profile_instance, data=profile_specific_data, partial=True, context=self.get_serializer_context())
-            if profile_serializer.is_valid():
-                profile_serializer.save()
-            else:
-                return Response(profile_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        user.refresh_from_db() 
+        user.refresh_from_db()
         final_user_serializer = CustomUserSerializer(user, context=self.get_serializer_context())
         return Response(final_user_serializer.data, status=status.HTTP_200_OK)
 
@@ -357,7 +349,7 @@ class TeacherActionsViewSet(viewsets.ViewSet):
         teacher_profile = getattr(request.user, 'teacher_profile', None)
         if teacher_profile:
             classes = teacher_profile.assigned_classes.all()
-            return Response([{'id': c.id, 'name': c.name} for c in classes])
+            return Response([{'id': c.id, 'name': c.master_class.name} for c in classes])
         return Response([])
 
 
@@ -383,17 +375,19 @@ class ProgressAnalyticsView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        user = request.user
+        user_id = request.query_params.get('user_id', request.user.id)
+        try:
+            user = CustomUser.objects.get(id=user_id)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
         today = timezone.now().date()
         
-        # Calculate weekly study minutes from the last 7 days
-        one_week_ago = today - timezone.timedelta(days=6) # Inclusive of today
+        one_week_ago = today - timezone.timedelta(days=6)
         weekly_activities = UserDailyActivity.objects.filter(user=user, date__gte=one_week_ago, date__lte=today).order_by('date')
         
-        # Create a dictionary for quick lookup
         activities_dict = {activity.date.strftime('%Y-%m-%d'): activity.study_duration_minutes for activity in weekly_activities}
         
-        # Generate date range for the last 7 days to ensure all days are present
         weekly_study_minutes_list = []
         for i in range(7):
             date_to_check = one_week_ago + timedelta(days=i)
@@ -440,7 +434,6 @@ class ProgressAnalyticsView(generics.GenericAPIView):
             login_timeline[date_str]['latest_login'] = activity.timestamp.isoformat()
 
 
-        # Subject progress data
         try:
             student_profile = StudentProfile.objects.get(user=user)
             if student_profile.enrolled_class:
@@ -498,7 +491,6 @@ class RecentActivityViewSet(viewsets.ModelViewSet):
         return self.queryset.none()
     
     def perform_create(self, serializer):
-        # Ensure users can only create activities for themselves
         serializer.save(user=self.request.user)
 
 
@@ -518,7 +510,6 @@ def record_study_ping(request):
         try:
             subject = ContentSubject.objects.get(pk=subject_id)
             
-            # Increment subject-specific study time
             subject_study, created = UserSubjectStudy.objects.get_or_create(
                 daily_activity=daily_activity,
                 subject=subject,
@@ -528,7 +519,6 @@ def record_study_ping(request):
                 subject_study.duration_minutes = F('duration_minutes') + duration
                 subject_study.save(update_fields=['duration_minutes'])
 
-            # Also increment the total daily lesson-based study time
             daily_activity.study_duration_minutes = F('study_duration_minutes') + duration
             daily_activity.save(update_fields=['study_duration_minutes'])
             
@@ -545,7 +535,6 @@ def record_study_ping(request):
             return Response({'error': 'Subject not found'}, status=status.HTTP_404_NOT_FOUND)
 
     else:
-        # Generic library ping without a subject
         daily_activity.library_study_duration_minutes = F('library_study_duration_minutes') + duration
         daily_activity.save(update_fields=['library_study_duration_minutes'])
         daily_activity.refresh_from_db()
@@ -556,29 +545,17 @@ def record_study_ping(request):
 
 
 class StudentTaskViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint that allows students to manage their personal tasks.
-    """
     queryset = StudentTask.objects.all()
     serializer_class = StudentTaskSerializer
     permission_classes = [permissions.IsAuthenticated, IsStudent]
 
     def get_queryset(self):
-        """
-        This view should only return tasks for the currently authenticated student.
-        """
         return self.queryset.filter(student=self.request.user)
 
     def perform_create(self, serializer):
-        """
-        Associate the task with the currently authenticated student upon creation.
-        """
         serializer.save(student=self.request.user)
 
 class UserDailyActivityViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    API endpoint for retrieving daily user activities.
-    """
     queryset = UserDailyActivity.objects.all()
     serializer_class = UserDailyActivitySerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -586,10 +563,62 @@ class UserDailyActivityViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['user', 'date']
 
     def get_queryset(self):
-        """
-        Users can only see their own daily activity.
-        """
         user = self.request.user
         if user.is_staff or user.role == 'Admin':
             return self.queryset
         return self.queryset.filter(user=user)
+
+class TeacherTaskViewSet(viewsets.ModelViewSet):
+    queryset = TeacherTask.objects.all()
+    serializer_class = TeacherTaskSerializer
+    permission_classes = [permissions.IsAuthenticated, IsTeacher]
+
+    def get_queryset(self):
+        return self.queryset.filter(teacher=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(teacher=self.request.user)
+
+class TeacherClassPerformanceView(APIView):
+    permission_classes = [IsAuthenticated, IsTeacher]
+
+    def get(self, request, *args, **kwargs):
+        teacher = request.user
+        
+        try:
+            teacher_profile = teacher.teacher_profile
+            assigned_classes_ids = teacher_profile.assigned_classes.values_list('id', flat=True)
+            subject_expertise_ids = teacher_profile.subject_expertise.values_list('id', flat=True)
+        except TeacherProfile.DoesNotExist:
+            return Response({"error": "Teacher profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Get all students in the teacher's assigned classes
+        students_in_classes = StudentProfile.objects.filter(enrolled_class_id__in=assigned_classes_ids).values_list('user_id', flat=True)
+        
+        # Filter quiz attempts for those students and for the subjects the teacher is an expert in
+        quiz_attempts = UserQuizAttempt.objects.filter(
+            user_id__in=students_in_classes,
+            quiz__lesson__subject_id__in=subject_expertise_ids
+        )
+        
+        ai_quiz_attempts = AILessonQuizAttempt.objects.filter(
+            user_id__in=students_in_classes,
+            lesson__subject_id__in=subject_expertise_ids
+        )
+        
+        total_score = 0
+        total_attempts = 0
+
+        for attempt in quiz_attempts:
+            total_score += attempt.score
+            total_attempts += 1
+            
+        for attempt in ai_quiz_attempts:
+            total_score += attempt.score
+            total_attempts += 1
+
+        average_performance = total_score / total_attempts if total_attempts > 0 else 0
+        
+        return Response({'average_performance': average_performance})
+
+    

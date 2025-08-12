@@ -148,14 +148,13 @@ class LessonSerializer(serializers.ModelSerializer):
 
 class SubjectSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True, context={'request': serializers.CurrentUserDefault()}) 
-    master_class_id = serializers.PrimaryKeyRelatedField(source='master_class', queryset=Class.objects.all(), write_only=True)
+    master_class = serializers.PrimaryKeyRelatedField(queryset=Class.objects.all(), write_only=True)
     master_class_name = serializers.CharField(source='master_class.name', read_only=True)
     progress = serializers.SerializerMethodField()
 
     class Meta:
         model = Subject
-        fields = ['id', 'master_class', 'master_class_id', 'master_class_name', 'name', 'description', 'lessons', 'progress']
-        read_only_fields = ['master_class']
+        fields = ['id', 'master_class', 'master_class_name', 'name', 'description', 'lessons', 'progress']
 
     def get_progress(self, obj):
         request = self.context.get('request')
@@ -345,3 +344,5 @@ class ManualReportSerializer(serializers.ModelSerializer):
         model = ManualReport
         fields = '__all__'
         read_only_fields = ('created_by', 'school', 'grade')
+
+    

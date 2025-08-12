@@ -9,26 +9,11 @@ import type { Class as ClassInterface, Subject as SubjectInterface, SchoolClass 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertTriangle, BookOpen, Calculator, FlaskConical, Globe, Palette, Music, Brain } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { AlertTriangle, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-
-// Helper to map subject names to icons
-const subjectIconMap: Record<string, LucideIcon> = {
-  default: BookOpen, math: Calculator, mathematics: Calculator, english: BookOpen,
-  science: FlaskConical, history: Globe, geography: Globe, physics: Brain,
-  chemistry: FlaskConical, biology: Brain, art: Palette, music: Music,
-};
-
-const getIconForSubject = (subjectName: string): LucideIcon => {
-  const nameLower = subjectName.toLowerCase();
-  for (const key in subjectIconMap) {
-    if (nameLower.includes(key)) { return subjectIconMap[key]; }
-  }
-  return subjectIconMap.default;
-};
+import { getIconForSubject } from '@/lib/utils';
 
 
 export default function MySubjectsPage() {

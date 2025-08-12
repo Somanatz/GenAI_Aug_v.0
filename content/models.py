@@ -42,6 +42,8 @@ class Lesson(models.Model):
     simplified_content = models.TextField(blank=True, null=True)
     lesson_order = models.PositiveIntegerField(default=0)
     requires_previous_quiz = models.BooleanField(default=True, help_text="If true, student must pass the quiz of the previous lesson in order to access this one.")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_lessons')
+
 
     class Meta:
         ordering = ['lesson_order']
@@ -315,3 +317,5 @@ class ManualReport(models.Model):
             elif percentage >= 50: self.grade = 'D'
             else: self.grade = 'F'
         super().save(*args, **kwargs)
+
+    

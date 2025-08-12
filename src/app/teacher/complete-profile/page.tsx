@@ -1,3 +1,4 @@
+
 // src/app/teacher/complete-profile/page.tsx
 'use client';
 
@@ -154,8 +155,6 @@ export default function CompleteTeacherProfilePage() {
 
     const formData = new FormData();
     
-    formData.append('profile_completed', 'true'); 
-
     Object.entries(data).forEach(([key, value]) => {
       if (key === 'profile_picture' || value === undefined) {
         return;

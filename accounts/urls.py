@@ -7,7 +7,7 @@ from .views import (
     LoginView, LogoutView, ProgressAnalyticsView, record_study_ping,
     RecentActivityViewSet, SyllabusListView, MasterClassListView, SchoolClassListView,
     StudentRecommendationViewSet, verify_email_view, contact_sales_view, StudentTaskViewSet,
-    UserDailyActivityViewSet
+    UserDailyActivityViewSet, TeacherTaskViewSet, TeacherClassPerformanceView
 )
 from content.views import RewardProgressView # Import the view
 
@@ -20,6 +20,7 @@ router.register(r'recent-activities', RecentActivityViewSet, basename='recentact
 router.register(r'school-classes', SchoolClassListView, basename='schoolclass')
 router.register(r'student-recommendations', StudentRecommendationViewSet, basename='studentrecommendation')
 router.register(r'student-tasks', StudentTaskViewSet, basename='studenttask')
+router.register(r'teacher-tasks', TeacherTaskViewSet, basename='teachertask')
 router.register(r'daily-activities', UserDailyActivityViewSet, basename='userdailyactivity')
 
 
@@ -33,7 +34,7 @@ urlpatterns = [
     path('record-study-ping/', record_study_ping, name='record_study_ping'),
     path('syllabuses/', SyllabusListView.as_view(), name='syllabus-list'),
     path('master-classes/', MasterClassListView.as_view(), name='masterclass-list'),
-    # Add the missing rewards progress URL directly here
+    path('teacher-analytics/class-performance/', TeacherClassPerformanceView.as_view(), name='teacher_class_performance'),
     path('rewards/progress/', RewardProgressView.as_view(), name='reward-progress'),
     path('verify-email/<uuid:token>/', verify_email_view, name='verify_email'),
     path('contact-sales/', contact_sales_view, name='contact-sales'),

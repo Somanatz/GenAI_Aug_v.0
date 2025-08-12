@@ -1,8 +1,9 @@
+
 from rest_framework import serializers
 from .models import (
     CustomUser, ParentStudentLink, School, StudentProfile, TeacherProfile, 
     ParentProfile, Syllabus, SchoolClass, StudentRecommendation, RecentActivity,
-    UserDailyActivity, UserSubjectStudy, StudentTask
+    UserDailyActivity, UserSubjectStudy, StudentTask, TeacherTask
 )
 from content.models import Class as MasterClass, Subject as ContentSubject # Avoid naming collision
 from django.utils.text import slugify # Import slugify
@@ -121,11 +122,12 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     enrolled_class_name = serializers.CharField(source='enrolled_class.master_class.name', read_only=True, allow_null=True)
     school_name = serializers.CharField(source='school.name', read_only=True, allow_null=True)
     profile_picture_url = serializers.SerializerMethodField()
+    enrolled_class_details = SchoolClassSerializer(source='enrolled_class', read_only=True)
 
     class Meta:
         model = StudentProfile
         fields = '__all__' 
-        read_only_fields = ['user', 'profile_picture_url', 'school_name', 'enrolled_class_name']
+        read_only_fields = ['user', 'profile_picture_url', 'school_name', 'enrolled_class_name', 'enrolled_class_details']
         extra_kwargs = {
             'school': {'required': False, 'allow_null': True},
             'enrolled_class': {'required': False, 'allow_null': True},
@@ -158,7 +160,7 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
         }
 
     def get_assigned_classes_details(self, obj):
-        return [{'id': sc.id, 'name': sc.master_class.name} for sc in obj.assigned_classes.all()]
+        return [{'id': sc.id, 'name': sc.master_class.name, 'master_class': sc.master_class_id} for sc in obj.assigned_classes.all()]
 
     def get_subject_expertise_details(self, obj):
         return [{'id': sub.id, 'name': sub.name} for sub in obj.subject_expertise.all()]
@@ -305,10 +307,10 @@ class StudentProfileCompletionSerializer(serializers.ModelSerializer):
 class TeacherProfileCompletionSerializer(serializers.ModelSerializer):
     school_id = serializers.PrimaryKeyRelatedField(queryset=School.objects.all(), source='school', write_only=True, allow_null=True, required=False)
     assigned_classes_ids = serializers.PrimaryKeyRelatedField(
-        queryset=SchoolClass.objects.all(), source='assigned_classes', many=True, required=False, write_only=True
+        queryset=SchoolClass.objects.all(), source='assigned_classes', many=True, required=False, write_only=True,
     )
     subject_expertise_ids = serializers.PrimaryKeyRelatedField(
-        queryset=ContentSubject.objects.all(), source='subject_expertise', many=True, required=False, write_only=True
+        queryset=ContentSubject.objects.all(), source='subject_expertise', many=True, required=False, write_only=True,
     )
     profile_picture = serializers.ImageField(required=False, allow_null=True)
 
@@ -366,3 +368,12 @@ class StudentTaskSerializer(serializers.ModelSerializer):
         model = StudentTask
         fields = ['id', 'student', 'title', 'description', 'due_date', 'completed', 'created_at']
         read_only_fields = ['student']
+    
+class TeacherTaskSerializer(serializers.ModelSerializer):
+    """Serializer for the TeacherTask model."""
+    class Meta:
+        model = TeacherTask
+        fields = ['id', 'teacher', 'title', 'description', 'due_date', 'completed', 'created_at']
+        read_only_fields = ['teacher']
+
+    

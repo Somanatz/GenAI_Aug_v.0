@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { Subject } from '@/interfaces';
+import type { Subject, UserRole } from '@/interfaces';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
@@ -8,10 +8,12 @@ import { Progress } from '@/components/ui/progress';
 interface SubjectCardProps {
   subject: Subject;
   classLevel: number;
+  userRole: UserRole;
 }
 
-const SubjectCard: React.FC<SubjectCardProps> = ({ subject, classLevel }) => {
+const SubjectCard: React.FC<SubjectCardProps> = ({ subject, classLevel, userRole }) => {
   const IconComponent = subject.icon;
+  const showProgress = userRole === 'Student' && subject.progress !== undefined;
 
   return (
     <Link href={subject.href || '#'} className="block h-full">
@@ -30,18 +32,19 @@ const SubjectCard: React.FC<SubjectCardProps> = ({ subject, classLevel }) => {
                 </div>
             </CardHeader>
             <CardContent className="p-6 flex-grow">
-                <p className="text-sm text-muted-foreground mb-4 h-20 overflow-hidden bg-[linear-gradient(to_bottom,_transparent_95%,_#cce4f6_95%)] bg-[length:100%_24px] border-l-2 border-red-400 pl-2">
-                {subject.description}
+                <p className="text-sm text-muted-foreground mb-4 h-20 overflow-hidden">
+                    {subject.description}
                 </p>
-
             </CardContent>
-            <CardFooter className="p-6 pt-0 border-t flex-col items-start">
-                <div className="flex justify-between items-center w-full mb-1">
-                    <span className="text-xs font-medium text-muted-foreground">Progress</span>
-                    <span className="text-xs font-bold text-primary">{Math.round(subject.progress || 0)}%</span>
-                </div>
-                <Progress value={subject.progress || 0} className="h-2" />
-            </CardFooter>
+            {showProgress && (
+              <CardFooter className="p-6 pt-0 border-t flex-col items-start">
+                  <div className="flex justify-between items-center w-full mb-1">
+                      <span className="text-xs font-medium text-muted-foreground">Progress</span>
+                      <span className="text-xs font-bold text-primary">{Math.round(subject.progress || 0)}%</span>
+                  </div>
+                  <Progress value={subject.progress || 0} className="h-2" />
+              </CardFooter>
+            )}
         </Card>
     </Link>
   );

@@ -69,10 +69,10 @@ class LessonViewSet(viewsets.ModelViewSet):
     serializer_class = LessonSerializer
     permission_classes = [IsAuthenticatedOrReadOnly] 
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['subject', 'subject__master_class', 'title']
+    filterset_fields = ['subject', 'subject__master_class', 'title', 'created_by']
 
     def get_queryset(self):
-        return Lesson.objects.all().select_related('subject', 'subject__master_class').order_by('subject__master_class__id', 'subject__id', 'lesson_order')
+        return Lesson.objects.all().select_related('subject', 'subject__master_class', 'created_by').order_by('subject__master_class__id', 'subject__id', 'lesson_order')
 
     def get_serializer_context(self):
         return {'request': self.request, **super().get_serializer_context()}
@@ -101,7 +101,7 @@ class LessonViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_staff and not (user.role == 'Admin' or user.role == 'Teacher'):
             raise PermissionDenied("You do not have permission to create lessons.")
-        serializer.save()
+        serializer.save(created_by=user)
 
 
     @action(detail=True, methods=['post'], permission_classes=[IsTeacher | IsAdminUser])

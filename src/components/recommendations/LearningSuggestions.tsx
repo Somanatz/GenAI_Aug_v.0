@@ -1,4 +1,3 @@
-
 // src/components/recommendations/LearningSuggestions.tsx
 'use client';
 
@@ -384,7 +383,7 @@ const StudyTimetableComponent = ({ timetable }: { timetable: { day: string; slot
 
                         {/* Time Slots */}
                         {timeSlots.map(time => (
-                            <React.Fragment key={time}>
+                           <div key={time} className="contents">
                                 <div className="font-semibold text-center p-2 border-r border-b">{time}</div>
                                 {timetable.map(day => {
                                     const slot = day.slots.find(s => s.time === time);
@@ -399,7 +398,7 @@ const StudyTimetableComponent = ({ timetable }: { timetable: { day: string; slot
                                         </div>
                                     );
                                 })}
-                            </React.Fragment>
+                            </div>
                         ))}
                     </div>
                 </div>
