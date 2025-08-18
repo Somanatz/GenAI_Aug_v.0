@@ -14,6 +14,8 @@ interface AuthContextType {
   login: (token: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  needsProfileCompletion: boolean;
+  setNeedsProfileCompletion: Dispatch<SetStateAction<boolean>>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,6 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
 
   const processUserData = useCallback((userData: User | null): User | null => {
     if (!userData) return null;
@@ -37,7 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     // Create a new object to ensure re-render
-    return { ...userData, profile_completed: profileActuallyCompleted };
+    const processedUser = { ...userData, profile_completed: profileActuallyCompleted };
+    setNeedsProfileCompletion(!profileActuallyCompleted && processedUser.role !== 'Admin');
+    return processedUser;
   }, []);
   
   const refreshUser = useCallback(async () => {
@@ -47,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentUser(processedUser);
     } catch (error) {
         console.error("Failed to refresh user data:", error);
-        logout();
+        // Do not logout here, might be a temporary network issue.
     }
   }, [processUserData]);
 
@@ -114,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       refreshUser,
+      needsProfileCompletion,
+      setNeedsProfileCompletion,
     }}>
       {children}
     </AuthContext.Provider>

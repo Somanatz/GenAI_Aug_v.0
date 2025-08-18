@@ -36,3 +36,25 @@ class Event(models.Model):
         # This validation runs in Django Admin or when .full_clean() is called
         if self.target_class and self.target_class.school != self.school:
             raise ValidationError({'target_class': 'Target class must belong to the selected school.'})
+
+
+class Message(models.Model):
+    """
+    Represents a private message sent between users.
+    """
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_messages', on_delete=models.CASCADE)
+    recipient = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='received_messages', on_delete=models.CASCADE)
+    subject = models.CharField(max_length=255)
+    body = models.TextField()
+    sent_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    
+    # Keep track of deleted messages for each user without actually deleting the record
+    sender_deleted = models.BooleanField(default=False)
+    recipient_deleted = models.BooleanField(default=False)
+    
+    class Meta:
+        ordering = ['-sent_at']
+        
+    def __str__(self):
+        return f"From {self.sender.username} to {self.recipient.username}: {self.subject}"

@@ -237,6 +237,7 @@ export interface User {
   username: string;
   email: string;
   role: UserRole;
+  full_name?: string; // Add full_name here for contact list
   is_school_admin?: boolean;
   school?: string | number | null; // ID of the school
   school_name?: string | null;
@@ -434,4 +435,17 @@ export interface UserDailyActivity {
     study_duration_minutes: number;
     library_study_duration_minutes: number;
     present: boolean;
+}
+
+export interface Message {
+  id: number;
+  sender: number;
+  sender_username: string;
+  sender_avatar_url?: string;
+  recipient: number;
+  recipient_username: string;
+  subject: string;
+  body: string;
+  sent_at: string;
+  read_at?: string;
 }

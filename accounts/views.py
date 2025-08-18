@@ -375,16 +375,28 @@ class ProgressAnalyticsView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        user_id = request.query_params.get('user_id', request.user.id)
+        requesting_user = request.user
+        target_user_id = request.query_params.get('user_id', requesting_user.id)
+
         try:
-            user = CustomUser.objects.get(id=user_id)
+            target_user = CustomUser.objects.get(id=target_user_id)
         except CustomUser.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        today = timezone.now().date()
+        # Permission check: Allow if self, or if teacher viewing own student, or admin viewing anyone in school
+        if requesting_user.id != target_user.id:
+            if requesting_user.role == 'Teacher':
+                if not requesting_user.school or target_user.school != requesting_user.school:
+                    raise PermissionDenied("You can only view analytics for students in your school.")
+            elif requesting_user.is_school_admin:
+                 if not requesting_user.school or target_user.school != requesting_user.school:
+                    raise PermissionDenied("You can only view analytics for users in your school.")
+            elif not requesting_user.is_staff:
+                raise PermissionDenied("You do not have permission to view this user's analytics.")
         
+        today = timezone.now().date()
         one_week_ago = today - timezone.timedelta(days=6)
-        weekly_activities = UserDailyActivity.objects.filter(user=user, date__gte=one_week_ago, date__lte=today).order_by('date')
+        weekly_activities = UserDailyActivity.objects.filter(user=target_user, date__gte=one_week_ago, date__lte=today).order_by('date')
         
         activities_dict = {activity.date.strftime('%Y-%m-%d'): activity.study_duration_minutes for activity in weekly_activities}
         
@@ -397,33 +409,33 @@ class ProgressAnalyticsView(generics.GenericAPIView):
                 'duration': activities_dict.get(date_str, 0)
             })
 
-        today_activity = UserDailyActivity.objects.filter(user=user, date=today).first()
+        today_activity = UserDailyActivity.objects.filter(user=target_user, date=today).first()
         today_study_minutes = today_activity.study_duration_minutes if today_activity else 0
 
         total_days_in_year = (today - today.replace(month=1, day=1)).days + 1
-        present_days = UserDailyActivity.objects.filter(user=user, present=True, date__year=today.year).count()
+        present_days = UserDailyActivity.objects.filter(user=target_user, present=True, date__year=today.year).count()
         attendance = {'total_days': total_days_in_year, 'present_days': present_days}
 
-        subject_distribution = UserSubjectStudy.objects.filter(daily_activity__user=user).values('subject__name').annotate(total_duration=Sum('duration_minutes')).order_by('-total_duration')
+        subject_distribution = UserSubjectStudy.objects.filter(daily_activity__user=target_user).values('subject__name').annotate(total_duration=Sum('duration_minutes')).order_by('-total_duration')
         
         today_subjects_studied_count = RecentActivity.objects.filter(
-            user=user, 
+            user=target_user, 
             activity_type='Lesson', 
             timestamp__date=today
         ).values('details').distinct().count()
 
         latest_passed_attempt_subquery = AILessonQuizAttempt.objects.filter(
             lesson=OuterRef('lesson'),
-            user=user,
+            user=target_user,
             passed=True
         ).order_by('-attempted_at').values('score')[:1]
 
-        quiz_attempts = AILessonQuizAttempt.objects.filter(user=user).values('lesson__title').annotate(
+        quiz_attempts = AILessonQuizAttempt.objects.filter(user=target_user).values('lesson__title').annotate(
             attempts=Count('id'),
             final_score=Subquery(latest_passed_attempt_subquery, output_field=db_models.FloatField())
         ).order_by('lesson__title')
 
-        login_activities = UserLoginActivity.objects.filter(user=user, timestamp__gte=one_week_ago).order_by('timestamp')
+        login_activities = UserLoginActivity.objects.filter(user=target_user, timestamp__gte=one_week_ago).order_by('timestamp')
         
         login_timeline = {}
         for activity in login_activities:
@@ -435,14 +447,14 @@ class ProgressAnalyticsView(generics.GenericAPIView):
 
 
         try:
-            student_profile = StudentProfile.objects.get(user=user)
+            student_profile = StudentProfile.objects.get(user=target_user)
             if student_profile.enrolled_class:
                 subjects_in_class = ContentSubject.objects.filter(master_class=student_profile.enrolled_class.master_class)
                 subject_progress = []
                 for subject in subjects_in_class:
                     total_lessons = Lesson.objects.filter(subject=subject).count()
                     completed_lessons = UserLessonProgress.objects.filter(
-                        user=user, lesson__subject=subject, completed=True
+                        user=target_user, lesson__subject=subject, completed=True
                     ).count()
                     subject_progress.append({
                         'subject__name': subject.name,
@@ -620,5 +632,3 @@ class TeacherClassPerformanceView(APIView):
         average_performance = total_score / total_attempts if total_attempts > 0 else 0
         
         return Response({'average_performance': average_performance})
-
-    

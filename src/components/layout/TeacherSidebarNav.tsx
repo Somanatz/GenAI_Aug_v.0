@@ -19,7 +19,7 @@ const navItems = [
   { href: '/teacher/calendar', label: 'Calendar & Tasks', icon: CalendarDays },
   { href: '/teacher/report-card', label: 'AI Report Card', icon: FileText },
   { href: '/teacher/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/teacher/communication', label: 'Communication', icon: MessageSquare },
+  { href: '/messages', label: 'Messages', icon: MessageSquare },
   { href: '/teacher/settings', label: 'Settings', icon: Settings },
 ];
 

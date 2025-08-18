@@ -21,6 +21,7 @@ const navItems = [
   { href: '/student/view-my-report', label: 'My Reports', icon: FileText },
   { href: '/student/library', label: 'Library', icon: Library },
   { href: '/student/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/messages', label: 'Messages', icon: MessageSquare },
   { href: '/forum', label: 'Forum', icon: MessageSquare },
   { href: '/student/settings', label: 'Settings', icon: Settings },
 ];

@@ -199,7 +199,9 @@ export default function ManageStudentsPage() {
                             <DropdownMenuItem asChild>
                                <Link href={`/teacher/analytics/${student.id}`}><BarChart3 className="mr-2 h-4 w-4" /> View Progress</Link>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => alert(`Message student ${student.id} - TBI`)}><MessageSquare className="mr-2 h-4 w-4" /> Send Message</DropdownMenuItem>
+                             <DropdownMenuItem asChild>
+                               <Link href={`/teacher/communication/message?studentId=${student.id}`}><MessageSquare className="mr-2 h-4 w-4" /> Send Message</Link>
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

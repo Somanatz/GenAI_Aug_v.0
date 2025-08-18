@@ -22,7 +22,7 @@ const getNavItems = (schoolId?: string | null) => {
     { href: `/school-admin/${schoolId}/reports`, label: 'Reports', icon: FileText },
     { href: `/school-admin/${schoolId}/analytics`, label: 'Analytics', icon: BarChart3 },
     { href: `/school-admin/${schoolId}/calendar`, label: 'Calendar', icon: CalendarDays },
-    { href: `/school-admin/${schoolId}/communication`, label: 'Communication', icon: MessageSquare },
+    { href: `/messages`, label: 'Messages', icon: MessageSquare },
     { href: `/school-admin/${schoolId}/settings`, label: 'Settings', icon: Settings },
   ];
 };
@@ -37,7 +37,7 @@ export function SchoolAdminSidebarNav() {
     <SidebarMenu>
       {navItems.map((item) => (
         <SidebarMenuItem key={item.href}>
-          <Link href={item.href}>
+          <Link href={item.href} legacyBehavior passHref>
             <SidebarMenuButton
               className={cn(
                 "w-full justify-start",
