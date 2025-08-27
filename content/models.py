@@ -1,4 +1,5 @@
 
+
 from django.db import models
 from django.db.models import JSONField # Corrected import
 from django.conf import settings
@@ -279,7 +280,7 @@ class StudentResource(models.Model):
 
 class ManualReport(models.Model):
     """
-    A report manually created by a teacher for a student.
+    A single report for a specific test event, which can contain multiple subject scores.
     """
     TEST_TYPE_CHOICES = [
         ('SLIP_TEST', 'Slip Test'),
@@ -291,31 +292,42 @@ class ManualReport(models.Model):
     student = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='manual_reports')
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_reports', limit_choices_to={'role__in': ['Teacher', 'Admin']})
     school = models.ForeignKey('accounts.School', on_delete=models.CASCADE, related_name='manual_reports')
-    subject_name = models.CharField(max_length=100)
+    
     test_name = models.CharField(max_length=255)
     test_type = models.CharField(max_length=20, choices=TEST_TYPE_CHOICES)
-    score = models.FloatField()
-    max_score = models.FloatField(default=100.0)
-    grade = models.CharField(max_length=5, blank=True)
-    remarks = models.TextField(blank=True)
     report_date = models.DateField()
-
+    
+    # Store all subject scores and remarks in a JSON field
+    scores_data = models.JSONField(help_text="Stores an array of subject performances, e.g., [{'subject_name': 'Math', 'score': 85, 'max_score': 100, 'remarks': 'Good'}]")
+    
+    # AI-generated content based on all subjects in scores_data
+    ai_analysis = models.JSONField(blank=True, null=True, help_text="Stores the structured AI-generated report analysis.")
+    
+    overall_grade = models.CharField(max_length=5, blank=True)
+    
     class Meta:
-        ordering = ['-report_date']
+        ordering = ['-report_date', 'test_name']
+        unique_together = ['student', 'test_name', 'report_date']
 
     def __str__(self):
-        return f"Report for {self.student.username} in {self.subject_name} ({self.report_date})"
+        return f"Report for {self.student.username} - {self.test_name} ({self.report_date})"
 
     def save(self, *args, **kwargs):
-        # Auto-calculate grade if not provided
-        if not self.grade:
-            percentage = (self.score / self.max_score) * 100
-            if percentage >= 90: self.grade = 'A+'
-            elif percentage >= 80: self.grade = 'A'
-            elif percentage >= 70: self.grade = 'B'
-            elif percentage >= 60: self.grade = 'C'
-            elif percentage >= 50: self.grade = 'D'
-            else: self.grade = 'F'
+        # Auto-calculate overall grade based on average percentage from scores_data
+        if self.scores_data and isinstance(self.scores_data, list) and not self.overall_grade:
+            total_score = 0
+            total_max_score = 0
+            for item in self.scores_data:
+                total_score += item.get('score', 0)
+                total_max_score += item.get('max_score', 0)
+            
+            if total_max_score > 0:
+                percentage = (total_score / total_max_score) * 100
+                if percentage >= 90: self.overall_grade = 'A+'
+                elif percentage >= 80: self.overall_grade = 'A'
+                elif percentage >= 70: self.overall_grade = 'B'
+                elif percentage >= 60: self.overall_grade = 'C'
+                elif percentage >= 50: self.overall_grade = 'D'
+                else: self.overall_grade = 'F'
         super().save(*args, **kwargs)
 
-    

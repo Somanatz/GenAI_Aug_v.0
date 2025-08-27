@@ -1,4 +1,5 @@
 
+
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action, api_view, permission_classes as dec_permission_classes
 from rest_framework.response import Response
@@ -465,7 +466,7 @@ class CheckpointViewSet(viewsets.ModelViewSet):
 
 
 class AILessonQuizAttemptViewSet(viewsets.ModelViewSet):
-    queryset = AILessonQuizAttempt.objects.all()
+    queryset = AILessonQuizAttempt.objects.all().select_related('lesson', 'lesson__subject')
     serializer_class = AILessonQuizAttemptSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
@@ -475,7 +476,10 @@ class AILessonQuizAttemptViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = super().get_queryset()
         if user.is_staff or user.role == 'Admin':
-            return qs
+            return qs.filter(lesson__subject__master_class__schools_offering__staff_and_students=user)
+        if user.role == 'Parent':
+            child_ids = ParentStudentLink.objects.filter(parent=user).values_list('student_id', flat=True)
+            return qs.filter(user_id__in=child_ids)
         return qs.filter(user=user)
 
     def perform_create(self, serializer):
@@ -594,7 +598,7 @@ class ManualReportViewSet(viewsets.ModelViewSet):
     serializer_class = ManualReportSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['student', 'school', 'test_type', 'subject_name']
+    filterset_fields = ['student', 'school', 'test_type', 'test_name']
 
     def get_queryset(self):
         user = self.request.user
@@ -622,7 +626,12 @@ def ai_summarize_lesson(request):
         return Response({'error': 'Lesson ID is required'}, status=status.HTTP_400_BAD_REQUEST)
     try:
         lesson = Lesson.objects.get(pk=lesson_id)
-        summary_placeholder = f"<h3>Summary for {lesson.title}</h3><p>This is an AI-generated summary placeholder.</p>"
+        # TODO: Here you would call your Genkit summarize_lesson flow
+        # from ai.flows.summarize_lesson_flow import summarizeLesson
+        # result = summarizeLesson({'lessonContent': lesson.content})
+        # For now, using a placeholder
+        summary_placeholder = f"<h3>Summary for {lesson.title}</h3><p>This is an AI-generated summary placeholder. Key topics include: ...</p>"
+        
         summary, created = AILessonSummary.objects.update_or_create(
             lesson=lesson,
             defaults={'summary': summary_placeholder}
@@ -641,7 +650,11 @@ def ai_translate_lesson(request):
         return Response({'error': 'Lesson ID and language are required'}, status=status.HTTP_400_BAD_REQUEST)
     try:
         lesson = Lesson.objects.get(pk=lesson_id)
-        translation_placeholder = f"<h3>{lesson.title} (Translated to {language})</h3><p>This is a placeholder for the translated content.</p>"
+        # TODO: Call Genkit translate_content flow
+        # from ai.flows.translate_content_flow import translateContent
+        # result = translateContent({'content': lesson.content, 'targetLanguage': language})
+        # For now, using a placeholder
+        translation_placeholder = f"<h3>{lesson.title} (Translated to {language})</h3><p>This is a placeholder for the translated content of the lesson.</p>"
 
         translation, created = TranslatedLessonContent.objects.update_or_create(
             lesson=lesson,

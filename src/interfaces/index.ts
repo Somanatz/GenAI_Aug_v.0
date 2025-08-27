@@ -419,14 +419,17 @@ export interface StudentRecommendation {
 export interface ManualReport {
     id: number;
     student: number;
-    subject_name: string;
+    created_by_username?: string | null;
     test_name: string;
     test_type: 'SLIP_TEST' | 'UNIT_TEST' | 'QUARTERLY' | 'ANNUAL';
-    score: number;
-    max_score: number;
-    grade: string;
-    remarks: string;
     report_date: string;
+    scores_data: {
+      subject_name: string;
+      score: number;
+      max_score: number;
+      remarks?: string;
+    }[];
+    ai_analysis?: any; 
 }
 export interface UserDailyActivity {
     id: number;

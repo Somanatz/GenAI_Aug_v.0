@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, BarChart3, Settings, MessageSquare, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Users, BarChart3, Settings, MessageSquare, CalendarDays, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   SidebarMenu,
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/parent', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/parent/children', label: 'My Children', icon: Users },
   { href: '/parent/progress', label: 'Progress Overview', icon: BarChart3 },
+  { href: '/parent/reports', label: 'View Reports', icon: FileText },
   { href: '/parent/calendar', label: 'School Calendar', icon: CalendarDays },
   { href: '/messages', label: 'Messages', icon: MessageSquare },
   { href: '/parent/settings', label: 'Settings', icon: Settings },

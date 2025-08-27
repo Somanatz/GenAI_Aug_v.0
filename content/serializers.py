@@ -1,4 +1,5 @@
 
+
 from rest_framework import serializers
 from .models import (
     Class, Subject, Lesson, Quiz, Question, Choice, UserLessonProgress, 
@@ -102,9 +103,10 @@ class LessonSerializer(serializers.ModelSerializer):
         model = Lesson
         fields = [
             'id', 'subject', 'subject_id', 'subject_name', 'title', 'content', 'video_url', 'audio_url', 'image_url',
-            'simplified_content', 'lesson_order', 'requires_previous_quiz', 'is_locked', 'quiz', 'ai_summary', 'translations'
+            'simplified_content', 'lesson_order', 'requires_previous_quiz', 'is_locked', 'quiz', 'ai_summary', 'translations',
+            'created_by'
         ]
-        read_only_fields = ['subject', 'ai_summary', 'translations']
+        read_only_fields = ['subject', 'ai_summary', 'translations', 'created_by']
 
     def get_is_locked(self, obj):
         request = self.context.get('request')
@@ -338,11 +340,13 @@ class StudentResourceSerializer(serializers.ModelSerializer):
 
 class ManualReportSerializer(serializers.ModelSerializer):
     student_username = serializers.CharField(source='student.username', read_only=True)
-    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True, allow_null=True)
+    ai_analysis = serializers.JSONField(required=False, allow_null=True)
+    scores_data = serializers.JSONField()
 
     class Meta:
         model = ManualReport
         fields = '__all__'
-        read_only_fields = ('created_by', 'school', 'grade')
+        read_only_fields = ('created_by', 'school', 'overall_grade')
 
     
